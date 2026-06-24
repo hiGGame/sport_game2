@@ -1,0 +1,42 @@
+server:
+  port: 8080
+  mode: debug  # debug | release
+
+database:
+  driver: postgres
+  host: localhost
+  port: 5432
+  user: postgres
+  password: postgres
+  dbname: sport_game2
+  sslmode: disable
+  max_open_conns: 25
+  max_idle_conns: 10
+
+jwt:
+  secret: "sport_game2_jwt_secret_change_me"
+  expire_hours: 168  # 7 days
+
+wechat:
+  appid: "wx941a4f72a0170537"
+  secret: "8de3b2d406356cb022e796d5da8cec5a"
+
+spider:
+  interval_odds: 5m    # 赔率刷新间隔
+  interval_result: 10m # 开奖结果刷新间隔
+  retry_count: 3
+  retry_delay: 2s
+  user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  referer: "https://www.sporttery.cn/"
+  health_file: "/tmp/spider_healthy"  # 健康检查文件路径
+  health_max_age: 3m  # 健康检查文件最大有效时长
+
+bet:
+  lock_minutes_before: 60  # 开赛前 60 分钟锁定下注
+  initial_credits: 2       # 新用户初始骨头数 / 每日重置骨头数
+
+ai:
+  provider: rule  # rule | llm
+  llm_api_key: ""
+  llm_base_url: ""
+  llm_model: ""

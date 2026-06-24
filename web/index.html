@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>竞彩足球 - 赛事数据</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
+        .header { background: linear-gradient(135deg, #1a1a2e, #16213e); color: #fff; padding: 20px 0; text-align: center; }
+        .header h1 { font-size: 24px; }
+        .header p { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+        .header .update-time { font-size: 12px; opacity: 0.5; margin-top: 2px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .tabs { display: flex; margin-bottom: 20px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .tab { flex: 1; padding: 14px; text-align: center; cursor: pointer; font-size: 15px; font-weight: 600; color: #666; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab.active { color: #e74c3c; border-bottom-color: #e74c3c; background: #fef5f5; }
+        .tab:hover:not(.active) { background: #f9f9f9; }
+        .match-list { display: flex; flex-direction: column; gap: 12px; }
+        .match-card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.15s; }
+        .match-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+        .match-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+        .league-info { display: flex; align-items: center; gap: 8px; }
+        .league-badge { background: #e74c3c; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+        .league-name { font-size: 14px; color: #888; }
+        .match-code { font-size: 12px; color: #aaa; }
+        .match-time { font-size: 12px; color: #e74c3c; font-weight: 600; }
+        .teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; margin-bottom: 16px; }
+        .team { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .team-logo { width: 48px; height: 48px; object-fit: contain; border-radius: 50%; }
+        .team-logo-wrap { width: 48px; height: 48px; position: relative; }
+        .team-logo-placeholder {
+            width: 48px; height: 48px; border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; font-weight: 700; color: #fff;
+        }
+        .team-name { font-size: 18px; font-weight: 700; }
+        .team-rank { font-size: 11px; color: #999; }
+        .vs { font-size: 14px; color: #ccc; font-weight: 600; }
+        .odds-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .odd-item { background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; border: 2px solid transparent; cursor: pointer; transition: all 0.15s; }
+        .odd-item:hover { border-color: #e74c3c; }
+        .odd-item.selected { background: #fff3e0; border-color: #ff9800 !important; box-shadow: 0 0 0 2px rgba(255,152,0,0.3); }
+        .odd-item.win { background: #fff3e0; border-color: #ff9800; }
+        .odd-label { font-size: 12px; color: #999; margin-bottom: 4px; }
+        .odd-value { font-size: 20px; font-weight: 700; color: #e74c3c; }
+        .odd-change { font-size: 11px; margin-top: 2px; }
+        .odd-change.up { color: #e74c3c; }
+        .odd-change.down { color: #27ae60; }
+        .odd-change.flat { color: #999; }
+        .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+        .status-selling { background: #d4edda; color: #155724; }
+        .status-stopped { background: #f8d7da; color: #721c24; }
+        .loading { text-align: center; padding: 60px; color: #999; font-size: 16px; }
+        .empty { text-align: center; padding: 40px; color: #ccc; }
+        .stats { display: flex; gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: #fff; border-radius: 8px; padding: 16px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; flex: 1; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #e74c3c; }
+        .stat-label { font-size: 12px; color: #999; margin-top: 4px; }
+        .result-badge { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 13px; font-weight: 700; }
+        .result-3 { background: #e8f5e9; color: #2e7d32; }
+        .result-1 { background: #fff3e0; color: #e65100; }
+        .result-0 { background: #ffebee; color: #c62828; }
+        .score-display { font-size: 24px; font-weight: 700; color: #333; }
+        .half-score { font-size: 12px; color: #999; }
+        .test-panel { background: #fff; border-radius: 10px; padding: 20px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .test-panel h3 { font-size: 16px; margin-bottom: 12px; color: #333; }
+        .test-panel .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+        .test-panel button { padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+        .btn-login { background: #e74c3c; color: #fff; }
+        .btn-login:hover { background: #c0392b; }
+        .btn-api { background: #3498db; color: #fff; }
+        .btn-api:hover { background: #2980b9; }
+        .btn-api:disabled { background: #bdc3c7; cursor: default; }
+        .test-panel input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; width: 140px; }
+        .test-panel .token-info { font-size: 12px; color: #27ae60; background: #eafaf1; padding: 6px 10px; border-radius: 6px; word-break: break-all; max-width: 100%; }
+        .test-panel pre { background: #2d3436; color: #dfe6e9; padding: 12px; border-radius: 8px; font-size: 12px; max-height: 200px; overflow: auto; margin-top: 10px; white-space: pre-wrap; }
+        .test-panel label { font-size: 13px; color: #666; margin-right: 4px; }
+        .leaderboard { background: #fff; border-radius: 10px; padding: 20px; margin-top: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .leaderboard h3 { font-size: 16px; margin-bottom: 12px; color: #333; }
+        .lb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .lb-table th { background: #f8f9fa; padding: 10px; text-align: center; border-bottom: 2px solid #e74c3c; color: #666; font-weight: 600; }
+        .lb-table td { padding: 10px; text-align: center; border-bottom: 1px solid #eee; }
+        .lb-table .role-expert { color: #e74c3c; font-weight: 600; }
+        .lb-table .role-ai { color: #3498db; font-weight: 600; }
+        .lb-table .role-user { color: #27ae60; font-weight: 600; }
+        .lb-table .streak { background: #fff3e0; color: #e65100; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 12px; }
+        .lb-table .acc-bar { display: inline-block; height: 6px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+        .bet-bar { display: none; background: #fff3e0; border: 2px solid #ff9800; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; align-items: center; gap: 12px; }
+        .bet-bar.show { display: flex; }
+        .bet-bar .bet-info { font-size: 14px; font-weight: 600; color: #e65100; flex: 1; }
+        .bet-bar button { padding: 10px 20px; background: #e74c3c; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }
+        .bet-bar button:hover { background: #c0392b; }
+        .bet-bar button:disabled { background: #bdc3c7; cursor: default; }
+        .bet-result { padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-top: 10px; display: none; }
+        .bet-result.show { display: block; }
+        .bet-result.success { background: #eafaf1; color: #27ae60; }
+        .bet-result.error { background: #fdedec; color: #c0392b; }
+        .bet-bar .login-hint { font-size: 13px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>竞彩足球赛事数据</h1>
+        <p>数据来源：竞彩网 sporttery.cn | 胜平负 + 开奖结果</p>
+        <div class="update-time" id="updateTime">数据更新时间：加载中...</div>
+    </div>
+    <div class="container">
+        <div class="stats" id="stats">
+            <div class="stat-card"><div class="stat-value" id="statOdds">0</div><div class="stat-label">在售赛事</div></div>
+            <div class="stat-card"><div class="stat-value" id="statResults">0</div><div class="stat-label">开奖结果</div></div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="odds" onclick="switchTab('odds')">赛事赔率</div>
+            <div class="tab" data-tab="results" onclick="switchTab('results')">开奖结果</div>
+        </div>
+
+        <div id="matchList" class="match-list">
+            <div class="loading">加载中...</div>
+        </div>
+
+        <div id="betResult" class="bet-result"></div>
+
+        <div class="leaderboard" id="leaderboardPanel">
+            <h3>竞猜排行榜</h3>
+            <div id="lbContent" style="text-align:center;color:#999;padding:20px">加载中...</div>
+        </div>
+
+        <div id="betBar" class="bet-bar">
+            <span class="login-hint" id="loginHint">请先在下方模拟登录</span>
+            <span class="bet-info" id="betInfo" style="display:none"></span>
+            <button id="betBtn" class="btn-api" disabled onclick="submitBet()">创建竞猜</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/v1';
+        let currentTab = 'odds';
+        let oddsData = [];
+        let resultsData = [];
+
+        const BET_LABELS = { '3': '胜', '1': '平', '0': '负' };
+
+        let selectedMatchId = null;
+        let selectedBetCode = null;
+        let selectedMatchName = '';
+        let selectedSubType = '6';
+
+        function switchTab(tab) {
+            currentTab = tab;
+            clearSelection();
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            renderList();
+        }
+
+        async function fetchOdds() {
+            const resp = await fetch(`${API_BASE}/lottery/match/bet-list?lotteryType=227`);
+            const data = await resp.json();
+            oddsData = data.list || [];
+        }
+
+        async function fetchResults() {
+            const resp = await fetch(`${API_BASE}/lottery/match/draw/list`);
+            const data = await resp.json();
+            resultsData = data.list || [];
+        }
+
+        function renderList() {
+            const container = document.getElementById('matchList');
+            if (currentTab === 'odds') { renderOdds(container); }
+            else { renderResults(container); }
+        }
+
+        function resultBadge(winFlag) {
+            if (!winFlag) return '<span class="result-badge" style="background:#f5f5f5;color:#999">未开奖</span>';
+            return `<span class="result-badge result-${winFlag}">${BET_LABELS[winFlag] || winFlag}</span>`;
+        }
+
+        function changeArrow(change) {
+            if (change === '1') return '<span class="odd-change up">↑</span>';
+            if (change === '-1') return '<span class="odd-change down">↓</span>';
+            return '<span class="odd-change flat">—</span>';
+        }
+
+        function teamLogoHtml(logoUrl, name) {
+            var initial = name ? name[0] : '?';
+            if (logoUrl) {
+                return `<div class="team-logo-wrap">
+                    <img class="team-logo" src="${logoUrl}" alt="${name}" onerror="this.style.display='none';this.parentElement.querySelector('.team-logo-placeholder').style.display='flex'">
+                    <div class="team-logo-placeholder" style="display:none">${initial}</div>
+                </div>`;
+            }
+            return `<div class="team-logo-wrap"><div class="team-logo-placeholder">${initial}</div></div>`;
+        }
+
+        function selectOption(matchId, betCode, matchName, subType) {
+            selectedMatchId = matchId;
+            selectedBetCode = betCode;
+            selectedMatchName = matchName;
+            selectedSubType = subType;
+            document.querySelectorAll('.odd-item').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll(`.odd-item[data-match="${matchId}"][data-code="${betCode}"]`).forEach(el => el.classList.add('selected'));
+            updateBetBar();
+        }
+
+        function clearSelection() {
+            selectedMatchId = null;
+            selectedBetCode = null;
+            selectedMatchName = '';
+            document.querySelectorAll('.odd-item').forEach(el => el.classList.remove('selected'));
+            updateBetBar();
+        }
+
+        function updateBetBar() {
+            const bar = document.getElementById('betBar');
+            const info = document.getElementById('betInfo');
+            const hint = document.getElementById('loginHint');
+            const btn = document.getElementById('betBtn');
+            const hasToken = !!testToken;
+            const hasSelection = selectedMatchId && selectedBetCode;
+
+            bar.classList.toggle('show', true);
+            hint.style.display = hasToken ? 'none' : '';
+            info.style.display = (hasToken && hasSelection) ? '' : 'none';
+            btn.disabled = !(hasToken && hasSelection);
+
+            if (hasToken && hasSelection) {
+                info.textContent = `${selectedMatchName} → ${BET_LABELS[selectedBetCode]} (2骨)`;
+            } else if (hasToken) {
+                info.textContent = '点击赔率选项选择竞猜';
+                info.style.display = '';
+            }
+        }
+
+        async function submitBet() {
+            const r = document.getElementById('betResult');
+            if (!testToken || !selectedMatchId || !selectedBetCode) return;
+            try {
+                const resp = await fetch(API_BASE + '/lottery/bet/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + testToken },
+                    body: JSON.stringify({ matchId: selectedMatchId, betCode: selectedBetCode, points: 2, subType: selectedSubType })
+                });
+                const data = await resp.json();
+                r.textContent = resp.ok ? '✅ 竞猜成功: ' + JSON.stringify(data) : '❌ ' + (data.message || JSON.stringify(data));
+                r.className = 'bet-result show ' + (resp.ok ? 'success' : 'error');
+                if (resp.ok) { clearSelection(); loadData(); }
+            } catch(e) { r.textContent = '❌ Error: ' + e.message; r.className = 'bet-result show error'; }
+        }
+
+        function renderOdds(container) {
+            if (!oddsData || oddsData.length === 0) {
+                container.innerHTML = '<div class="empty">暂无赛事数据</div>';
+                return;
+            }
+
+            container.innerHTML = oddsData.map(m => {
+                const betInfos = m.lotteryInfo.betInfos || [];
+                const hadInfo = betInfos.find(b => b.subType === '6') || betInfos[0];
+                if (!hadInfo || !hadInfo.options || hadInfo.options.length === 0) return '';
+
+                const isSelling = !m.lotteryInfo.isStopSell;
+                const statusClass = isSelling ? 'status-selling' : 'status-stopped';
+                const statusText = isSelling ? '在售' : '停售';
+                const mid = m.matchInfo.matchId;
+                const mname = m.homeTeamInfo.cnName + ' vs ' + m.awayTeamInfo.cnName;
+
+                const oddsItems = hadInfo.options.map(opt => {
+                    const isSel = mid === selectedMatchId && opt.betCode === selectedBetCode;
+                    return `<div class="odd-item${isSel ? ' selected' : ''}" data-match="${mid}" data-code="${opt.betCode}"
+                         onclick="selectOption('${mid}','${opt.betCode}','${mname.replace(/'/g, "\\'")}','${hadInfo.subType}')">
+                        <div class="odd-label">${BET_LABELS[opt.betCode] || opt.betCode}</div>
+                        <div class="odd-value">${opt.odds.toFixed(2)}</div>
+                        ${changeArrow(opt.change)}
+                    </div>`;
+                }).join('');
+
+                return `<div class="match-card">
+                    <div class="match-header">
+                        <div class="league-info">
+                            <span class="league-badge">${m.tournamentInfo.cnAlias || m.tournamentInfo.cnName || ''}</span>
+                            <span class="league-name">${m.tournamentInfo.cnName || ''}</span>
+                            <span class="match-code">${m.lotteryInfo.matchCode || ''}</span>
+                        </div>
+                        <div>
+                            <span class="match-time">${m.matchInfo.matchTimeStr || ''}</span>
+                            <span class="status-badge ${statusClass}" style="margin-left:8px">${statusText}</span>
+                        </div>
+                    </div>
+                    <div class="teams">
+                        <div class="team">
+                            ${teamLogoHtml(m.homeTeamInfo.logoUrl, m.homeTeamInfo.cnName)}
+                            <div class="team-name">${m.homeTeamInfo.cnName || m.homeTeamInfo.cnAlias}</div>
+                            <div class="team-rank">${m.homeTeamInfo.rank || m.homeTeamInfo.tournamentRank || ''}</div>
+                        </div>
+                        <div class="vs">VS</div>
+                        <div class="team">
+                            ${teamLogoHtml(m.awayTeamInfo.logoUrl, m.awayTeamInfo.cnName)}
+                            <div class="team-name">${m.awayTeamInfo.cnName || m.awayTeamInfo.cnAlias}</div>
+                            <div class="team-rank">${m.awayTeamInfo.rank || m.awayTeamInfo.tournamentRank || ''}</div>
+                        </div>
+                    </div>
+                    <div class="odds-grid">${oddsItems}</div>
+                </div>`;
+            }).join('') || '<div class="empty">暂无赛事数据</div>';
+        }
+
+        function renderResults(container) {
+            if (!resultsData || resultsData.length === 0) {
+                container.innerHTML = '<div class="empty">暂无开奖结果</div>';
+                return;
+            }
+
+            container.innerHTML = resultsData.map(item => {
+                const d = item.lastDrawInfo;
+                if (!d) return '';
+
+                const gameDraws = d.gameDrawList || [];
+                const hadDraw = gameDraws.find(g => g.subType === '6');
+                const winFlag = hadDraw ? hadDraw.betCode : '';
+                const hadOdds = hadDraw ? hadDraw.odds : 0;
+
+                const scoreParts = (d.homeTeamScore.score || '').split(':');
+                const homeScore = scoreParts[0] || '-';
+                const awayScore = scoreParts[1] || '-';
+                const halfParts = (d.homeTeamScore.halfTimeScore || '').split(':');
+                const halfHome = halfParts[0] || '-';
+                const halfAway = halfParts[1] || '-';
+
+                let oddsHtml = '';
+                if (hadDraw && hadOdds > 0) {
+                    oddsHtml = `<div class="odd-item ${winFlag === '3' ? 'win' : ''}">
+                        <div class="odd-label">胜(3)</div>
+                        <div class="odd-value">${winFlag === '3' ? hadOdds.toFixed(2) : '-'}</div>
+                    </div>
+                    <div class="odd-item ${winFlag === '1' ? 'win' : ''}">
+                        <div class="odd-label">平(1)</div>
+                        <div class="odd-value">${winFlag === '1' ? hadOdds.toFixed(2) : '-'}</div>
+                    </div>
+                    <div class="odd-item ${winFlag === '0' ? 'win' : ''}">
+                        <div class="odd-label">负(0)</div>
+                        <div class="odd-value">${winFlag === '0' ? hadOdds.toFixed(2) : '-'}</div>
+                    </div>`;
+                }
+
+                return `<div class="match-card">
+                    <div class="match-header">
+                        <div class="league-info">
+                            <span class="league-badge">${d.tournamentInfo.cnName || d.tournamentInfo.cnAlias || ''}</span>
+                            <span class="match-code">${d.matchCode || ''}</span>
+                            <span class="match-time">${d.matchTimeStr || ''}</span>
+                        </div>
+                        <div>${resultBadge(winFlag)}</div>
+                    </div>
+                    <div class="teams">
+                        <div class="team">
+                            ${teamLogoHtml(d.homeTeamInfo.logoUrl, d.homeTeamInfo.cnName)}
+                            <div class="team-name">${d.homeTeamInfo.cnName || ''}</div>
+                        </div>
+                        <div class="vs">
+                            <div class="score-display">${homeScore} : ${awayScore}</div>
+                            <div class="half-score">半场 ${halfHome} : ${halfAway}</div>
+                        </div>
+                        <div class="team">
+                            ${teamLogoHtml(d.awayTeamInfo.logoUrl, d.awayTeamInfo.cnName)}
+                            <div class="team-name">${d.awayTeamInfo.cnName || ''}</div>
+                        </div>
+                    </div>
+                    ${oddsHtml ? `<div class="odds-grid">${oddsHtml}</div>` : ''}
+                </div>`;
+            }).join('') || '<div class="empty">暂无开奖结果</div>';
+        }
+
+        async function loadData() {
+            document.getElementById('matchList').innerHTML = '<div class="loading">加载中...</div>';
+            try {
+                await Promise.all([fetchOdds(), fetchResults()]);
+                document.getElementById('statOdds').textContent = oddsData.length;
+                document.getElementById('statResults').textContent = resultsData.length;
+                renderList();
+                updateBetBar();
+            } catch (err) {
+                document.getElementById('matchList').innerHTML = `<div class="empty">加载失败: ${err.message}</div>`;
+            }
+        }
+
+        loadData();
+        fetchLeaderboard();
+
+        async function fetchLeaderboard() {
+            try {
+                const resp = await fetch(API_BASE + '/lottery/leaderboard');
+                const data = await resp.json();
+                renderLeaderboard(data.list || []);
+            } catch(e) { document.getElementById('lbContent').innerHTML = '加载失败'; }
+        }
+
+        function renderLeaderboard(list) {
+            if (!list.length) { document.getElementById('lbContent').innerHTML = '暂无数据'; return; }
+            const roleMap = { expert: '大拿', ai: 'AI狗', user: '用户' };
+            const barColors = { expert: '#e74c3c', ai: '#3498db', user: '#27ae60' };
+            let html = `<table class="lb-table"><tr><th></th><th>名称</th><th>准确率</th><th>猜中</th><th>最佳连击</th></tr>`;
+            for (const e of list) {
+                const acc = e.wins > 0 ? (e.accuracy || 0).toFixed(1) : '0.0';
+                const avatarHtml = e.avatar
+                    ? `<img src="${e.avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="team-logo-placeholder" style="width:32px;height:32px;font-size:14px;display:none">${e.name[0]}</div>`
+                    : `<div class="team-logo-placeholder" style="width:32px;height:32px;font-size:14px">${e.name[0]}</div>`;
+                html += `<tr>
+                    <td>${avatarHtml}</td>
+                    <td><span class="role-${e.role}">${e.name}</span></td>
+                    <td><span class="acc-bar" style="background:${barColors[e.role]};width:${Math.max(parseFloat(acc)*0.8,4)}px"></span>${acc}%</td>
+                    <td>${e.wins}</td>
+                    <td>${e.bestStreak > 0 ? `<span class="streak">🔥 ${e.bestStreak}连击</span>` : '-'}</td>
+                </tr>`;
+            }
+            html += '</table>';
+            document.getElementById('lbContent').innerHTML = html;
+        }
+
+        let testToken = '';
+        function setToken(t) {
+            testToken = t;
+            document.getElementById('tokenDisplay').textContent = t ? '已登录 (token: ' + t.substring(0,30) + '...)' : '未登录';
+            document.querySelectorAll('.btn-api').forEach(b => b.disabled = !testToken);
+            updateBetBar();
+        }
+
+        async function devLogin() {
+            const num = document.getElementById('userNum').value || 1;
+            const r = document.getElementById('apiResponse');
+            try {
+                const resp = await fetch(API_BASE + '/customer/login/dev', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({userNum: Number(num)}) });
+                const data = await resp.json();
+                r.textContent = JSON.stringify(data, null, 2);
+                if (data.token) setToken(data.token);
+            } catch(e) { r.textContent = 'Error: ' + e.message; }
+        }
+
+        async function callApi(method, path, body) {
+            const r = document.getElementById('apiResponse');
+            if (!testToken) { r.textContent = '请先模拟登录'; return; }
+            try {
+                const opts = { method, headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+testToken } };
+                if (body) opts.body = JSON.stringify(body);
+                const resp = await fetch(API_BASE + path, opts);
+                const data = await resp.json();
+                r.textContent = JSON.stringify(data, null, 2);
+            } catch(e) { r.textContent = 'Error: ' + e.message; }
+        }
+    </script>
+
+    <div class="container">
+        <div class="test-panel">
+            <h3>接口调试面板</h3>
+            <div class="row">
+                <label>用户编号:</label>
+                <input id="userNum" type="number" min="1" max="99" value="1">
+                <button class="btn-login" onclick="devLogin()">模拟登录</button>
+                <span class="token-info" id="tokenDisplay">未登录</span>
+            </div>
+            <div class="row">
+                <button class="btn-api" disabled onclick="callApi('GET','/user/info')">获取用户信息</button>
+                <button class="btn-api" disabled onclick="callApi('POST','/lottery/bet/share')">分享赚骨头</button>
+                <button class="btn-api" disabled onclick="callApi('GET','/lottery/bet/mine')">竞猜记录</button>
+                <button class="btn-api" disabled onclick="callApi('PUT','/user/info',{nickname:'测试用户',avatarUrl:''})">更新用户资料</button>
+                <button class="btn-api" disabled onclick="callApi('GET','/lottery/pk/yesterday')">每日PK</button>
+            </div>
+            <pre id="apiResponse">点击按钮查看接口响应...<br><br>创建竞猜入口: 在上方赛事赔率区点击赔率选项</pre>
+        </div>
+    </div>
+</body>
+</html>

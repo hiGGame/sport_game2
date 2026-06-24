@@ -1,0 +1,731 @@
+# ============================================================================
+#  竞彩赛事竞猜系统 OpenAPI 接口文档
+#  GameInterface — 微信小程序后端服务
+# ============================================================================
+openapi: "3.0.3"
+info:
+  title: "竞彩赛事竞猜系统"
+  description: |
+    微信小程序后端 API，包含：微信授权登录、赛事信息查询、竞猜投注、结算。
+  version: "1.0.0"
+
+servers:
+  - url: "http://localhost:8080/v1"
+    description: "测试环境"
+  - url: "https://api.windcloud.top/v1"
+    description: "正式环境"
+
+tags:
+  - name: "GameInterface"
+    description: "全部业务接口"
+
+paths:
+
+  # ==========================================================================
+  #  认证
+  # ==========================================================================
+  /customer/login/wechat:
+    post:
+      tags: ["GameInterface"]
+      summary: "微信授权登录"
+      description: |
+        微信小程序登录入口。前端调用 wx.login() 获取 code，后端换取 openid，
+        自动注册新用户（赠送 1000 初始积分）或登录已有用户，返回 JWT。
+        后续需要鉴权的接口在 Header 中携带 Authorization: Bearer <token>。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required: ["code"]
+              properties:
+                code:
+                  type: "string"
+                  description: "wx.login() 返回的临时登录凭证，5 分钟有效，仅能使用一次"
+                appid:
+                  type: "string"
+                  description: "微信小程序 AppID（可选，后端已配置默认值）"
+                state:
+                  type: "string"
+                  description: "自定义状态参数，用于防 CSRF（可选）"
+      responses:
+        "200":
+          description: "登录成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  token:
+                    type: "string"
+                    description: "JWT 令牌，有效期 7 天"
+                  openId:
+                    type: "string"
+                    description: "微信 openid"
+                  wechatNickname:
+                    type: "string"
+                    description: "微信昵称（新用户为空）"
+                  wechatAvatar:
+                    type: "string"
+                    description: "微信头像 URL"
+                  needBind:
+                    type: "boolean"
+                    description: "是否需要绑定手机号"
+                  merchantId:
+                    type: "string"
+                    description: "商户 ID（预留）"
+                  shops:
+                    type: "array"
+                    description: "关联店铺列表（预留）"
+                    items:
+                      type: "object"
+                      properties:
+                        merchantId: { type: "string" }
+                        shopName: { type: "string" }
+
+  # ==========================================================================
+  #  用户
+  # ==========================================================================
+  /user/info:
+    get:
+      tags: ["GameInterface"]
+      summary: "获取用户信息"
+      description: "获取当前登录用户的详细信息（积分、竞猜统计）。需携带 JWT token。"
+      security: [{ "BearerAuth": [] }]
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  id:
+                    type: "integer"
+                    format: "int64"
+                    description: "用户 ID"
+                  openId:
+                    type: "string"
+                    description: "微信 openid"
+                  nickname:
+                    type: "string"
+                    description: "昵称"
+                  avatarUrl:
+                    type: "string"
+                    description: "头像 URL"
+                  credits:
+                    type: "integer"
+                    description: "当前积分余额"
+                  totalBets:
+                    type: "integer"
+                    description: "总竞猜次数"
+                  wins:
+                    type: "integer"
+                    description: "猜中次数"
+    put:
+      tags: ["GameInterface"]
+      summary: "更新用户资料"
+      description: "更新当前用户的昵称和头像。需携带 JWT token。"
+      security: [{ "BearerAuth": [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties:
+                nickname:
+                  type: "string"
+                  description: "新昵称"
+                avatarUrl:
+                  type: "string"
+                  description: "新头像 URL"
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  success:
+                    type: "boolean"
+                    description: "是否更新成功"
+
+  # ==========================================================================
+  #  赛事信息
+  # ==========================================================================
+  /lottery/match/bet-list:
+    get:
+      tags: ["GameInterface"]
+      summary: "赛事投注列表"
+      description: |
+        查询可投注的赛事及赔率信息，按发行期号分组。
+        支持的玩法编码：6=胜平负，1=让球胜平负，2=总进球，3=比分，4=半全场
+      security: []
+      parameters:
+        - name: "lotteryType"
+          in: "query"
+          schema:
+            type: "string"
+            enum: ["227", "228"]
+          description: "彩种类型。227=足球，228=篮球。不传返回全部"
+        - name: "subType"
+          in: "query"
+          schema:
+            type: "string"
+          description: "玩法筛选。不传返回全部"
+        - name: "sortType"
+          in: "query"
+          schema:
+            type: "string"
+            default: "0"
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  list:
+                    type: "array"
+                    description: "赛事列表（平铺）"
+                    items:
+                      $ref: "#/components/schemas/MatchBetInfo"
+                  groups:
+                    type: "array"
+                    description: "按发行期号分组"
+                    items:
+                      type: "object"
+                      properties:
+                        issue: { type: "string", description: "发行期号" }
+                        list:
+                          type: "array"
+                          items:
+                            $ref: "#/components/schemas/MatchBetInfo"
+
+  /lottery/match/bet-info:
+    get:
+      tags: ["GameInterface"]
+      summary: "单场投注信息"
+      description: "查询指定场次的详细投注信息（含所有玩法赔率）。"
+      security: []
+      parameters:
+        - name: "lotteryType"
+          in: "query"
+          required: true
+          schema: { type: "string" }
+          description: "彩种类型。227=足球，228=篮球"
+        - name: "matchCode"
+          in: "query"
+          required: true
+          schema: { type: "string" }
+          description: "赛事编号（如 001）"
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  info:
+                     $ref: "#/components/schemas/MatchBetInfo"
+
+  /lottery/match/draw/list:
+    get:
+      tags: ["GameInterface"]
+      summary: "开奖大厅列表"
+      description: "获取最近已开奖的赛事结果（最近 50 条有效结果），含比分和开奖赔率。"
+      security: []
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  list:
+                    type: "array"
+                    items: { $ref: "#/components/schemas/LotteryDrawHomeInfo" }
+
+  # ==========================================================================
+  #  预测
+  # ==========================================================================
+  /matches/{matchId}/predict:
+    get:
+      tags: ["GameInterface"]
+      summary: "三角色预测"
+      description: |
+        获取指定赛事的三角色预测：
+        - AI狗：基于赔率反推概率
+        - 资深大拿：平台认证专家推荐
+        - 用户竞猜：所有用户对该赛事的竞猜汇总
+        已开奖赛事同时返回开奖结果。
+      security: []
+      parameters:
+        - name: "matchId"
+          in: "path"
+          required: true
+          schema: { type: "string" }
+          description: "赛事 ID（来自赛事列表的 matchId 字段）"
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  matchId: { type: "string", description: "赛事 ID" }
+                  matchInfo: { $ref: "#/components/schemas/MatchBetInfo" }
+                  drawInfo:
+                    $ref: "#/components/schemas/DrawInfoReply"
+                    description: "开奖结果（仅已开奖赛事返回）"
+                  aiPredictions:
+                    type: "array"
+                    description: "AI 狗预测"
+                    items: { $ref: "#/components/schemas/PredictionResult" }
+                  expertPredictions:
+                    type: "array"
+                    description: "资深大拿预测"
+                    items: { $ref: "#/components/schemas/ExpertPredictionView" }
+                  userPredictions:
+                    type: "array"
+                    description: "用户竞猜汇总"
+                    items: { $ref: "#/components/schemas/UserPredictionView" }
+
+  # ==========================================================================
+  #  排行榜
+  # ==========================================================================
+  /lottery/leaderboard:
+    get:
+      tags: ["GameInterface"]
+      summary: "预测排行榜"
+      description: "返回 AI狗、资深大拿、用户三方的预测准确率排行榜。无需 JWT token。"
+      security: []
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  list:
+                    type: "array"
+                    items:
+                      type: "object"
+                      properties:
+                        name: { type: "string", description: "角色名称" }
+                        role: { type: "string", description: "角色类型：ai/expert/user" }
+                        accuracy: { type: "number", description: "准确率(%)" }
+                        wins: { type: "integer", description: "猜中次数" }
+                        total: { type: "integer", description: "总预测次数" }
+                        bestStreak: { type: "integer", description: "最长连中" }
+
+  # ==========================================================================
+  #  竞猜
+  # ==========================================================================
+  /lottery/bet/create:
+    post:
+      tags: ["GameInterface"]
+      summary: "创建竞猜"
+      description: |
+        用户对一场赛事提交竞猜预测，从积分中扣减相应点数。
+
+        【默认值】
+        - lotteryType 默认为 "227"（竞彩足球）
+        - subType 默认为 "6"（胜平负）
+        - Points 不传或 ≤0 时默认为 2 根骨头
+
+        【业务规则】
+        - 扣减指定积分，不足返回 402
+        - 赛事停售或距截止时间不足（60 分钟）返回 403
+        - 成功返回预测 ID 和扣减后积分余额
+
+        需携带 JWT token。
+      security: [{ "BearerAuth": [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: "object"
+              required: ["matchId", "betCode"]
+              properties:
+                matchId:
+                  type: "string"
+                  description: "赛事 ID（来自赛事列表）"
+                betCode:
+                  type: "string"
+                  description: "投注选项编码。3=胜，1=平，0=负"
+                subType:
+                  type: "string"
+                  default: "6"
+                  description: "玩法编码。6=胜平负，不传默认6"
+                points:
+                  type: "integer"
+                  description: "投注骨头数。不传默认 2"
+      responses:
+        "200":
+          description: "竞猜创建成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  predictionId:
+                    type: "integer"
+                    format: "int64"
+                    description: "竞猜记录 ID"
+                  balanceAfter:
+                    type: "integer"
+                    description: "扣减后积分余额"
+        "400":
+          description: "参数错误（缺少必填字段或玩法选项不匹配）"
+        "401":
+          description: "未登录或 token 无效"
+        "402":
+          description: "积分（骨头）不足"
+        "403":
+          description: "赛事已停售、已锁定或已开赛"
+        "404":
+           description: "赛事未找到"
+        "409":
+           description: "已对该赛事下过竞猜（同一用户同赛事同玩法只能下一次）"
+
+  /lottery/bet/share:
+    post:
+      tags: ["GameInterface"]
+      summary: "分享成功"
+      description: |
+        客户端分享成功后调用此接口，每调用一次增加 2 根骨头。
+        需携带 JWT token。
+
+        【规则说明】
+        - 每日凌晨 0 点系统自动重置所有用户骨头为默认值 2
+        - 分享获得的额外骨头当天有效
+      security: [{ "BearerAuth": [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: "object"
+              properties: {}
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  balanceAfter:
+                    type: "integer"
+                    description: "增加后的骨头余额"
+
+  /lottery/bet/mine:
+    get:
+      tags: ["GameInterface"]
+      summary: "我的竞猜记录"
+      description: |
+        获取当前用户最近的竞猜记录（最多 20 条），含赛事展示信息。
+
+        【三角色对比规则】
+        - 对于已结算的赛事，返回 winner 字段
+        - winner 取值：ai（AI狗猜中）、expert（大拿猜中）、user（用户猜中）、tie（多角色同时猜中）
+        - 同时返回 AI狗和大拿的预测及正确性
+
+        需携带 JWT token。
+      security: [{ "BearerAuth": [] }]
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  list:
+                    type: "array"
+                    description: "竞猜记录列表"
+                    items:
+                      type: "object"
+                      properties:
+                        id: { type: "integer", format: "int64", description: "记录 ID" }
+                        matchId: { type: "string", description: "赛事 ID" }
+                        homeTeam: { type: "string", description: "主队名" }
+                        awayTeam: { type: "string", description: "客队名" }
+                        leagueName: { type: "string", description: "联赛名" }
+                        matchTime: { type: "string", description: "比赛时间" }
+                        betCode: { type: "string", description: "投注选项。3=胜 1=平 0=负" }
+                        points: { type: "integer", description: "下注骨头数" }
+                        status:
+                          type: "string"
+                          enum: ["pending", "won", "lost"]
+                          description: "状态"
+                        isCorrect:
+                          type: "boolean"
+                          description: "是否猜中"
+                        winner:
+                          type: "string"
+                          enum: ["ai", "expert", "user", "tie"]
+                          description: "胜出角色（已结算赛事）"
+                        aiBetCode:
+                          type: "string"
+                          description: "AI狗预测"
+                        aiCorrect:
+                          type: "boolean"
+                          description: "AI狗是否正确"
+                        expertName:
+                          type: "string"
+                          description: "大拿名称"
+                        expertBetCode:
+                          type: "string"
+                          description: "大拿预测"
+                        expertCorrect:
+                          type: "boolean"
+                          description: "大拿是否正确"
+
+  /matches/{matchId}/settle:
+    post:
+      tags: ["GameInterface"]
+      summary: "结算赛事"
+      description: |
+        根据开奖结果结算指定赛事的所有待处理竞猜。
+
+        【结算规则】
+        - 猜中：奖励双倍骨头
+        - 猜错/无对应结果：退还骨头
+        - 已结算的不重复处理
+
+        需携带 JWT token。
+      security: [{ "BearerAuth": [] }]
+      parameters:
+        - name: "matchId"
+          in: "path"
+          required: true
+          schema: { type: "string" }
+          description: "赛事 ID"
+      responses:
+        "200":
+          description: "结算完成"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  matchId: { type: "string", description: "赛事 ID" }
+                  settled: { type: "integer", description: "已结算数量" }
+                  refunded: { type: "integer", description: "已退款数量" }
+
+# ============================================================================
+#  Schema 定义
+# ============================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "JWT"
+      description: "Header: Authorization: Bearer <token>"
+
+  schemas:
+    MatchBetInfo:
+      description: "一场赛事的完整信息"
+      type: "object"
+      properties:
+        matchInfo:
+          description: "赛事基础信息"
+          type: "object"
+          properties:
+            matchId: { type: "string", description: "赛事唯一 ID" }
+            sportId: { type: "string", description: "运动类型编号" }
+            matchTimeStr: { type: "string", description: "比赛时间" }
+            status: { type: "string", description: "赛事状态" }
+            statusCode: { type: "string" }
+            statusName: { type: "string" }
+            homeTeamScore: { $ref: "#/components/schemas/MatchScore" }
+            awayTeamScore: { $ref: "#/components/schemas/MatchScore" }
+        lotteryInfo:
+          description: "彩票/竞猜信息"
+          type: "object"
+          properties:
+            lotteryType: { type: "string", description: "彩种类型。227=足球，228=篮球" }
+            matchCode: { type: "string", description: "赛事编号（如 001）" }
+            issue: { type: "string", description: "发行期号" }
+            round: { type: "string", description: "轮次" }
+            betEndTimeStr: { type: "string", description: "投注截止时间" }
+            reverse: { type: "boolean" }
+            betInfos:
+              type: "array"
+              description: "各玩法赔率"
+              items: { $ref: "#/components/schemas/BetInfo" }
+            spValue: { type: "number", format: "float" }
+            isStopSell: { type: "boolean", description: "是否停售" }
+        tournamentInfo:
+          description: "联赛信息"
+          type: "object"
+          properties:
+            id: { type: "string" }
+            cnName: { type: "string", description: "联赛中文名" }
+            cnAlias: { type: "string", description: "联赛别名" }
+            color: { type: "string" }
+            level: { type: "string" }
+            logoUrl: { type: "string", description: "联赛 Logo" }
+        homeTeamInfo:
+          description: "主队信息"
+          type: "object"
+          properties:
+            id: { type: "string" }
+            cnName: { type: "string", description: "球队中文名" }
+            cnAlias: { type: "string", description: "球队别名" }
+            logoUrl: { type: "string", description: "队徽 URL" }
+            tournamentRank: { type: "string", description: "联赛排名" }
+            fifaClubRank: { type: "string" }
+            fifaCountryRank: { type: "string" }
+            fibaCountryRank: { type: "string" }
+            rank: { type: "string" }
+        awayTeamInfo:
+          description: "客队信息"
+          type: "object"
+          properties:
+            id: { type: "string" }
+            cnName: { type: "string", description: "球队中文名" }
+            cnAlias: { type: "string" }
+            logoUrl: { type: "string" }
+            tournamentRank: { type: "string" }
+            fifaClubRank: { type: "string" }
+            fifaCountryRank: { type: "string" }
+            fibaCountryRank: { type: "string" }
+            rank: { type: "string" }
+
+    MatchScore:
+      description: "比分信息"
+      type: "object"
+      properties:
+        score: { type: "string", description: "全场比分" }
+        normalTimeScore: { type: "string", description: "常规时间比分" }
+        halfTimeScore: { type: "string", description: "半场比分" }
+
+    BetInfo:
+      description: "单个玩法的赔率"
+      type: "object"
+      properties:
+        subType: { type: "string", description: "玩法编码" }
+        supportType: { type: "string" }
+        handicap: { type: "number", format: "float", description: "让球数" }
+        options:
+          type: "array"
+          items:
+            type: "object"
+            properties:
+               betCode: { type: "string", description: "选项编码。3=胜，1=平，0=负" }
+               odds: { type: "number", format: "float", description: "赔率" }
+               change: { type: "string", description: "赔率变化趋势" }
+
+    LotteryDrawHomeInfo:
+      description: "开奖结果摘要"
+      type: "object"
+      properties:
+        lotteryType: { type: "string", description: "彩种类型" }
+        optionCount: { type: "string", description: "玩法数量" }
+        lastDrawInfo:
+          $ref: "#/components/schemas/DrawInfoReply"
+
+    DrawInfoReply:
+      description: "开奖结果"
+      type: "object"
+      properties:
+        matchId: { type: "string" }
+        matchCode: { type: "string" }
+        weekDay: { type: "string" }
+        round: { type: "string" }
+        isSingle: { type: "boolean" }
+        matchTimeStr: { type: "string" }
+        tournamentInfo:
+          type: "object"
+          properties:
+            id: { type: "string" }
+            cnName: { type: "string" }
+            cnAlias: { type: "string" }
+            color: { type: "string" }
+            level: { type: "string" }
+            logoUrl: { type: "string" }
+        homeTeamInfo:
+          type: "object"
+          properties:
+            id: { type: "string" }
+            cnName: { type: "string" }
+            cnAlias: { type: "string" }
+            logoUrl: { type: "string" }
+            tournamentRank: { type: "string" }
+            fifaClubRank: { type: "string" }
+            fifaCountryRank: { type: "string" }
+            fibaCountryRank: { type: "string" }
+            rank: { type: "string" }
+        awayTeamInfo:
+          type: "object"
+          properties:
+            id: { type: "string" }
+            cnName: { type: "string" }
+            cnAlias: { type: "string" }
+            logoUrl: { type: "string" }
+            tournamentRank: { type: "string" }
+            fifaClubRank: { type: "string" }
+            fifaCountryRank: { type: "string" }
+            fibaCountryRank: { type: "string" }
+            rank: { type: "string" }
+        isValid: { type: "boolean", description: "是否有效开奖" }
+        homeTeamScore: { $ref: "#/components/schemas/MatchScore" }
+        awayTeamScore: { $ref: "#/components/schemas/MatchScore" }
+        gameDrawList:
+          type: "array"
+          description: "各玩法开奖结果"
+          items:
+            type: "object"
+            properties:
+              subType: { type: "string" }
+              handicap: { type: "number", format: "float" }
+              betCode: { type: "string", description: "开奖结果编码" }
+              odds: { type: "number", format: "float" }
+
+    PredictionResult:
+      description: "AI 预测结果"
+      type: "object"
+      properties:
+        matchId: { type: "string" }
+        lotteryType: { type: "string" }
+        subType: { type: "string" }
+        betCode: { type: "string" }
+        confidence: { type: "number", format: "float", description: "置信度 0-1" }
+        reasoning: { type: "string", description: "预测理由" }
+        modelName: { type: "string", description: "模型名称。rule=规则，llm=大模型" }
+
+    ExpertPredictionView:
+      description: "专家预测"
+      type: "object"
+      properties:
+        expertName: { type: "string" }
+        avatarUrl: { type: "string" }
+        title: { type: "string" }
+        subType: { type: "string" }
+        betCode: { type: "string" }
+        confidence: { type: "number", format: "float" }
+        reasoning: { type: "string" }
+
+    UserPredictionView:
+      description: "用户竞猜"
+      type: "object"
+      properties:
+        userId: { type: "integer", format: "int64" }
+        nickname: { type: "string" }
+        avatarUrl: { type: "string" }
+        subType: { type: "string" }
+        betCode: { type: "string" }
+        points: { type: "integer", description: "下注骨头数" }

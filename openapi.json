@@ -1,0 +1,1231 @@
+{
+  "components": {
+    "schemas": {
+      "BetInfo": {
+        "description": "单个玩法的赔率",
+        "properties": {
+          "handicap": {
+            "description": "让球数",
+            "format": "float",
+            "type": "number"
+          },
+          "options": {
+            "items": {
+              "properties": {
+                "betCode": {
+                  "description": "选项编码。3=胜，1=平，0=负",
+                  "type": "string"
+                },
+                "change": {
+                  "description": "赔率变化趋势",
+                  "type": "string"
+                },
+                "odds": {
+                  "description": "赔率",
+                  "format": "float",
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "subType": {
+            "description": "玩法编码",
+            "type": "string"
+          },
+          "supportType": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DrawInfoReply": {
+        "description": "开奖结果",
+        "properties": {
+          "awayTeamInfo": {
+            "properties": {
+              "cnAlias": {
+                "type": "string"
+              },
+              "cnName": {
+                "type": "string"
+              },
+              "fibaCountryRank": {
+                "type": "string"
+              },
+              "fifaClubRank": {
+                "type": "string"
+              },
+              "fifaCountryRank": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "logoUrl": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "string"
+              },
+              "tournamentRank": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "awayTeamScore": {
+            "$ref": "#/components/schemas/MatchScore"
+          },
+          "gameDrawList": {
+            "description": "各玩法开奖结果",
+            "items": {
+              "properties": {
+                "betCode": {
+                  "description": "开奖结果编码",
+                  "type": "string"
+                },
+                "handicap": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "odds": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "subType": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "homeTeamInfo": {
+            "properties": {
+              "cnAlias": {
+                "type": "string"
+              },
+              "cnName": {
+                "type": "string"
+              },
+              "fibaCountryRank": {
+                "type": "string"
+              },
+              "fifaClubRank": {
+                "type": "string"
+              },
+              "fifaCountryRank": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "logoUrl": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "string"
+              },
+              "tournamentRank": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "homeTeamScore": {
+            "$ref": "#/components/schemas/MatchScore"
+          },
+          "isSingle": {
+            "type": "boolean"
+          },
+          "isValid": {
+            "description": "是否有效开奖",
+            "type": "boolean"
+          },
+          "matchCode": {
+            "type": "string"
+          },
+          "matchId": {
+            "type": "string"
+          },
+          "matchTimeStr": {
+            "type": "string"
+          },
+          "round": {
+            "type": "string"
+          },
+          "tournamentInfo": {
+            "properties": {
+              "cnAlias": {
+                "type": "string"
+              },
+              "cnName": {
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "level": {
+                "type": "string"
+              },
+              "logoUrl": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "weekDay": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ExpertPredictionView": {
+        "description": "专家预测",
+        "properties": {
+          "avatarUrl": {
+            "type": "string"
+          },
+          "betCode": {
+            "type": "string"
+          },
+          "confidence": {
+            "format": "float",
+            "type": "number"
+          },
+          "expertName": {
+            "type": "string"
+          },
+          "reasoning": {
+            "type": "string"
+          },
+          "subType": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "LotteryDrawHomeInfo": {
+        "description": "开奖结果摘要",
+        "properties": {
+          "lastDrawInfo": {
+            "$ref": "#/components/schemas/DrawInfoReply"
+          },
+          "lotteryType": {
+            "description": "彩种类型",
+            "type": "string"
+          },
+          "optionCount": {
+            "description": "玩法数量",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "MatchBetInfo": {
+        "description": "一场赛事的完整信息",
+        "properties": {
+          "awayTeamInfo": {
+            "description": "客队信息",
+            "properties": {
+              "cnAlias": {
+                "type": "string"
+              },
+              "cnName": {
+                "description": "球队中文名",
+                "type": "string"
+              },
+              "fibaCountryRank": {
+                "type": "string"
+              },
+              "fifaClubRank": {
+                "type": "string"
+              },
+              "fifaCountryRank": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "logoUrl": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "string"
+              },
+              "tournamentRank": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "homeTeamInfo": {
+            "description": "主队信息",
+            "properties": {
+              "cnAlias": {
+                "description": "球队别名",
+                "type": "string"
+              },
+              "cnName": {
+                "description": "球队中文名",
+                "type": "string"
+              },
+              "fibaCountryRank": {
+                "type": "string"
+              },
+              "fifaClubRank": {
+                "type": "string"
+              },
+              "fifaCountryRank": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "logoUrl": {
+                "description": "队徽 URL",
+                "type": "string"
+              },
+              "rank": {
+                "type": "string"
+              },
+              "tournamentRank": {
+                "description": "联赛排名",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "lotteryInfo": {
+            "description": "彩票/竞猜信息",
+            "properties": {
+              "betEndTimeStr": {
+                "description": "投注截止时间",
+                "type": "string"
+              },
+              "betInfos": {
+                "description": "各玩法赔率",
+                "items": {
+                  "$ref": "#/components/schemas/BetInfo"
+                },
+                "type": "array"
+              },
+              "isStopSell": {
+                "description": "是否停售",
+                "type": "boolean"
+              },
+              "issue": {
+                "description": "发行期号",
+                "type": "string"
+              },
+              "lotteryType": {
+                "description": "彩种类型。227=足球，228=篮球",
+                "type": "string"
+              },
+              "matchCode": {
+                "description": "赛事编号（如 001）",
+                "type": "string"
+              },
+              "reverse": {
+                "type": "boolean"
+              },
+              "round": {
+                "description": "轮次",
+                "type": "string"
+              },
+              "spValue": {
+                "format": "float",
+                "type": "number"
+              }
+            },
+            "type": "object"
+          },
+          "matchInfo": {
+            "description": "赛事基础信息",
+            "properties": {
+              "awayTeamScore": {
+                "$ref": "#/components/schemas/MatchScore"
+              },
+              "homeTeamScore": {
+                "$ref": "#/components/schemas/MatchScore"
+              },
+              "matchId": {
+                "description": "赛事唯一 ID",
+                "type": "string"
+              },
+              "matchTimeStr": {
+                "description": "比赛时间",
+                "type": "string"
+              },
+              "sportId": {
+                "description": "运动类型编号",
+                "type": "string"
+              },
+              "status": {
+                "description": "赛事状态",
+                "type": "string"
+              },
+              "statusCode": {
+                "type": "string"
+              },
+              "statusName": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "tournamentInfo": {
+            "description": "联赛信息",
+            "properties": {
+              "cnAlias": {
+                "description": "联赛别名",
+                "type": "string"
+              },
+              "cnName": {
+                "description": "联赛中文名",
+                "type": "string"
+              },
+              "color": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "level": {
+                "type": "string"
+              },
+              "logoUrl": {
+                "description": "联赛 Logo",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "MatchScore": {
+        "description": "比分信息",
+        "properties": {
+          "halfTimeScore": {
+            "description": "半场比分",
+            "type": "string"
+          },
+          "normalTimeScore": {
+            "description": "常规时间比分",
+            "type": "string"
+          },
+          "score": {
+            "description": "全场比分",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PredictionResult": {
+        "description": "AI 预测结果",
+        "properties": {
+          "betCode": {
+            "type": "string"
+          },
+          "confidence": {
+            "description": "置信度 0-1",
+            "format": "float",
+            "type": "number"
+          },
+          "lotteryType": {
+            "type": "string"
+          },
+          "matchId": {
+            "type": "string"
+          },
+          "modelName": {
+            "description": "模型名称。rule=规则，llm=大模型",
+            "type": "string"
+          },
+          "reasoning": {
+            "description": "预测理由",
+            "type": "string"
+          },
+          "subType": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UserPredictionView": {
+        "description": "用户竞猜",
+        "properties": {
+          "avatarUrl": {
+            "type": "string"
+          },
+          "betCode": {
+            "type": "string"
+          },
+          "nickname": {
+            "type": "string"
+          },
+          "points": {
+            "description": "下注骨头数",
+            "type": "integer"
+          },
+          "subType": {
+            "type": "string"
+          },
+          "userId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "Header: Authorization: Bearer \u003ctoken\u003e",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "微信小程序后端 API，包含：微信授权登录、赛事信息查询、竞猜投注、结算。\n",
+    "title": "竞彩赛事竞猜系统",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/customer/login/wechat": {
+      "post": {
+        "description": "微信小程序登录入口。前端调用 wx.login() 获取 code，后端换取 openid，\n自动注册新用户（赠送 1000 初始积分）或登录已有用户，返回 JWT。\n后续需要鉴权的接口在 Header 中携带 Authorization: Bearer \u003ctoken\u003e。\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "appid": {
+                    "description": "微信小程序 AppID（可选，后端已配置默认值）",
+                    "type": "string"
+                  },
+                  "code": {
+                    "description": "wx.login() 返回的临时登录凭证，5 分钟有效，仅能使用一次",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "自定义状态参数，用于防 CSRF（可选）",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "merchantId": {
+                      "description": "商户 ID（预留）",
+                      "type": "string"
+                    },
+                    "needBind": {
+                      "description": "是否需要绑定手机号",
+                      "type": "boolean"
+                    },
+                    "openId": {
+                      "description": "微信 openid",
+                      "type": "string"
+                    },
+                    "shops": {
+                      "description": "关联店铺列表（预留）",
+                      "items": {
+                        "properties": {
+                          "merchantId": {
+                            "type": "string"
+                          },
+                          "shopName": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "token": {
+                      "description": "JWT 令牌，有效期 7 天",
+                      "type": "string"
+                    },
+                    "wechatAvatar": {
+                      "description": "微信头像 URL",
+                      "type": "string"
+                    },
+                    "wechatNickname": {
+                      "description": "微信昵称（新用户为空）",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "登录成功"
+          }
+        },
+        "security": [],
+        "summary": "微信授权登录",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/lottery/bet/create": {
+      "post": {
+        "description": "用户对一场赛事提交竞猜预测，从积分中扣减相应点数。\n\n【默认值】\n- lotteryType 默认为 \"227\"（竞彩足球）\n- subType 默认为 \"6\"（胜平负）\n- Points 不传或 ≤0 时默认为 2 根骨头\n\n【业务规则】\n- 扣减指定积分，不足返回 402\n- 赛事停售或距截止时间不足（60 分钟）返回 403\n- 成功返回预测 ID 和扣减后积分余额\n\n需携带 JWT token。\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "betCode": {
+                    "description": "投注选项编码。3=胜，1=平，0=负",
+                    "type": "string"
+                  },
+                  "matchId": {
+                    "description": "赛事 ID（来自赛事列表）",
+                    "type": "string"
+                  },
+                  "points": {
+                    "description": "投注骨头数。不传默认 2",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "matchId",
+                  "betCode"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "balanceAfter": {
+                      "description": "扣减后积分余额",
+                      "type": "integer"
+                    },
+                    "predictionId": {
+                      "description": "竞猜记录 ID",
+                      "format": "int64",
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "竞猜创建成功"
+          },
+          "400": {
+            "description": "参数错误（缺少必填字段或玩法选项不匹配）"
+          },
+          "401": {
+            "description": "未登录或 token 无效"
+          },
+          "402": {
+            "description": "积分（骨头）不足"
+          },
+          "403": {
+            "description": "赛事已停售或已锁定"
+          },
+          "404": {
+            "description": "赛事未找到"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "创建竞猜",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/lottery/bet/mine": {
+      "get": {
+        "description": "获取当前用户最近的竞猜记录（最多 20 条），含赛事展示信息。\n\n【三角色对比规则】\n- 对于已结算的赛事，返回 winner 字段\n- winner 取值：ai（AI狗猜中）、expert（大拿猜中）、user（用户猜中）、tie（多角色同时猜中）\n- 同时返回 AI狗和大拿的预测及正确性\n\n需携带 JWT token。\n",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "list": {
+                      "description": "竞猜记录列表",
+                      "items": {
+                        "properties": {
+                          "aiBetCode": {
+                            "description": "AI狗预测",
+                            "type": "string"
+                          },
+                          "aiCorrect": {
+                            "description": "AI狗是否正确",
+                            "type": "boolean"
+                          },
+                          "awayTeam": {
+                            "description": "客队名",
+                            "type": "string"
+                          },
+                          "betCode": {
+                            "description": "投注选项。3=胜 1=平 0=负",
+                            "type": "string"
+                          },
+                          "expertBetCode": {
+                            "description": "大拿预测",
+                            "type": "string"
+                          },
+                          "expertCorrect": {
+                            "description": "大拿是否正确",
+                            "type": "boolean"
+                          },
+                          "expertName": {
+                            "description": "大拿名称",
+                            "type": "string"
+                          },
+                          "homeTeam": {
+                            "description": "主队名",
+                            "type": "string"
+                          },
+                          "id": {
+                            "description": "记录 ID",
+                            "format": "int64",
+                            "type": "integer"
+                          },
+                          "isCorrect": {
+                            "description": "是否猜中",
+                            "type": "boolean"
+                          },
+                          "leagueName": {
+                            "description": "联赛名",
+                            "type": "string"
+                          },
+                          "matchId": {
+                            "description": "赛事 ID",
+                            "type": "string"
+                          },
+                          "matchTime": {
+                            "description": "比赛时间",
+                            "type": "string"
+                          },
+                          "points": {
+                            "description": "下注骨头数",
+                            "type": "integer"
+                          },
+                          "status": {
+                            "description": "状态",
+                            "enum": [
+                              "pending",
+                              "won",
+                              "lost"
+                            ],
+                            "type": "string"
+                          },
+                          "winner": {
+                            "description": "胜出角色（已结算赛事）",
+                            "enum": [
+                              "ai",
+                              "expert",
+                              "user",
+                              "tie"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "我的竞猜记录",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/lottery/bet/share": {
+      "post": {
+        "description": "客户端分享成功后调用此接口，每调用一次增加 2 根骨头。\n需携带 JWT token。\n\n【规则说明】\n- 每日凌晨 0 点系统自动重置所有用户骨头为默认值 2\n- 分享获得的额外骨头当天有效\n",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "balanceAfter": {
+                      "description": "增加后的骨头余额",
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "分享成功",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/lottery/match/bet-info": {
+      "get": {
+        "description": "查询指定场次的详细投注信息（含所有玩法赔率）。",
+        "parameters": [
+          {
+            "description": "彩种类型。227=足球，228=篮球",
+            "in": "query",
+            "name": "lotteryType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "赛事编号（如 001）",
+            "in": "query",
+            "name": "matchCode",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "info": {
+                      "$ref": "#/components/schemas/MatchBetInfo"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功"
+          }
+        },
+        "security": [],
+        "summary": "单场投注信息",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/lottery/match/bet-list": {
+      "get": {
+        "description": "查询可投注的赛事及赔率信息，按发行期号分组。\n支持的玩法编码：6=胜平负，1=让球胜平负，2=总进球，3=比分，4=半全场\n",
+        "parameters": [
+          {
+            "description": "彩种类型。227=足球，228=篮球。不传返回全部",
+            "in": "query",
+            "name": "lotteryType",
+            "schema": {
+              "enum": [
+                "227",
+                "228"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "玩法筛选。不传返回全部",
+            "in": "query",
+            "name": "subType",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortType",
+            "schema": {
+              "default": "0",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "groups": {
+                      "description": "按发行期号分组",
+                      "items": {
+                        "properties": {
+                          "issue": {
+                            "description": "发行期号",
+                            "type": "string"
+                          },
+                          "list": {
+                            "items": {
+                              "$ref": "#/components/schemas/MatchBetInfo"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "list": {
+                      "description": "赛事列表（平铺）",
+                      "items": {
+                        "$ref": "#/components/schemas/MatchBetInfo"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功"
+          }
+        },
+        "security": [],
+        "summary": "赛事投注列表",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/lottery/match/draw/list": {
+      "get": {
+        "description": "获取最近已开奖的赛事结果（最近 50 条有效结果），含比分和开奖赔率。",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "list": {
+                      "items": {
+                        "$ref": "#/components/schemas/LotteryDrawHomeInfo"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功"
+          }
+        },
+        "security": [],
+        "summary": "开奖大厅列表",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/matches/{matchId}/predict": {
+      "get": {
+        "description": "获取指定赛事的三角色预测：\n- AI狗：基于赔率反推概率\n- 资深大拿：平台认证专家推荐\n- 用户竞猜：所有用户对该赛事的竞猜汇总\n已开奖赛事同时返回开奖结果。\n",
+        "parameters": [
+          {
+            "description": "赛事 ID（来自赛事列表的 matchId 字段）",
+            "in": "path",
+            "name": "matchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "aiPredictions": {
+                      "description": "AI 狗预测",
+                      "items": {
+                        "$ref": "#/components/schemas/PredictionResult"
+                      },
+                      "type": "array"
+                    },
+                    "drawInfo": {
+                      "$ref": "#/components/schemas/DrawInfoReply",
+                      "description": "开奖结果（仅已开奖赛事返回）"
+                    },
+                    "expertPredictions": {
+                      "description": "资深大拿预测",
+                      "items": {
+                        "$ref": "#/components/schemas/ExpertPredictionView"
+                      },
+                      "type": "array"
+                    },
+                    "matchId": {
+                      "description": "赛事 ID",
+                      "type": "string"
+                    },
+                    "matchInfo": {
+                      "$ref": "#/components/schemas/MatchBetInfo"
+                    },
+                    "userPredictions": {
+                      "description": "用户竞猜汇总",
+                      "items": {
+                        "$ref": "#/components/schemas/UserPredictionView"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功"
+          }
+        },
+        "security": [],
+        "summary": "三角色预测",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/matches/{matchId}/settle": {
+      "post": {
+        "description": "根据开奖结果结算指定赛事的所有待处理竞猜。\n\n【结算规则】\n- 猜中：奖励双倍骨头\n- 猜错/无对应结果：退还骨头\n- 已结算的不重复处理\n\n需携带 JWT token。\n",
+        "parameters": [
+          {
+            "description": "赛事 ID",
+            "in": "path",
+            "name": "matchId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "matchId": {
+                      "description": "赛事 ID",
+                      "type": "string"
+                    },
+                    "refunded": {
+                      "description": "已退款数量",
+                      "type": "integer"
+                    },
+                    "settled": {
+                      "description": "已结算数量",
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "结算完成"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "结算赛事",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    },
+    "/user/info": {
+      "get": {
+        "description": "获取当前登录用户的详细信息（积分、竞猜统计）。需携带 JWT token。",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "avatarUrl": {
+                      "description": "头像 URL",
+                      "type": "string"
+                    },
+                    "credits": {
+                      "description": "当前积分余额",
+                      "type": "integer"
+                    },
+                    "id": {
+                      "description": "用户 ID",
+                      "format": "int64",
+                      "type": "integer"
+                    },
+                    "nickname": {
+                      "description": "昵称",
+                      "type": "string"
+                    },
+                    "openId": {
+                      "description": "微信 openid",
+                      "type": "string"
+                    },
+                    "totalBets": {
+                      "description": "总竞猜次数",
+                      "type": "integer"
+                    },
+                    "wins": {
+                      "description": "猜中次数",
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "获取用户信息",
+        "tags": [
+          "GameInterface"
+        ]
+      },
+      "put": {
+        "description": "更新当前用户的昵称和头像。需携带 JWT token。",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "avatarUrl": {
+                    "description": "新头像 URL",
+                    "type": "string"
+                  },
+                  "nickname": {
+                    "description": "新昵称",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "description": "是否更新成功",
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "成功"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "更新用户资料",
+        "tags": [
+          "GameInterface"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "测试环境",
+      "url": "http://localhost:8080/v1"
+    },
+    {
+      "description": "正式环境",
+      "url": "http://39.96.17.106/v1"
+    }
+  ],
+  "tags": [
+    {
+      "description": "全部业务接口",
+      "name": "GameInterface"
+    }
+  ]
+}

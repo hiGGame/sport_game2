@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>竞彩赛事数据</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #333; }
+        .header { background: linear-gradient(135deg, #1a1a2e, #16213e); color: #fff; padding: 20px 0; text-align: center; }
+        .header h1 { font-size: 24px; }
+        .header p { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .tabs { display: flex; gap: 0; margin-bottom: 20px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .tab { flex: 1; padding: 14px; text-align: center; cursor: pointer; font-size: 15px; font-weight: 600; color: #666; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab.active { color: #e74c3c; border-bottom-color: #e74c3c; background: #fef5f5; }
+        .tab:hover { background: #f9f9f9; }
+        .sub-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .sub-tab { padding: 6px 16px; border-radius: 20px; background: #fff; border: 1px solid #ddd; cursor: pointer; font-size: 13px; color: #666; transition: all 0.2s; }
+        .sub-tab.active { background: #e74c3c; color: #fff; border-color: #e74c3c; }
+        .sub-tab:hover:not(.active) { border-color: #e74c3c; color: #e74c3c; }
+        .match-list { display: flex; flex-direction: column; gap: 12px; }
+        .match-card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); transition: transform 0.15s; }
+        .match-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+        .match-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+        .league-info { display: flex; align-items: center; gap: 8px; }
+        .league-badge { background: #e74c3c; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+        .league-name { font-size: 14px; color: #888; }
+        .match-code { font-size: 12px; color: #aaa; }
+        .match-time { font-size: 12px; color: #e74c3c; font-weight: 600; }
+        .teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; margin-bottom: 16px; }
+        .team { text-align: center; }
+        .team-name { font-size: 18px; font-weight: 700; }
+        .team-rank { font-size: 11px; color: #999; margin-top: 2px; }
+        .vs { font-size: 14px; color: #ccc; font-weight: 600; }
+        .odds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+        .odd-item { background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; border: 2px solid transparent; transition: all 0.15s; }
+        .odd-item:hover { border-color: #e74c3c; }
+        .odd-label { font-size: 12px; color: #999; margin-bottom: 4px; }
+        .odd-value { font-size: 20px; font-weight: 700; color: #e74c3c; }
+        .odd-change { font-size: 11px; margin-top: 2px; }
+        .odd-change.up { color: #e74c3c; }
+        .odd-change.down { color: #27ae60; }
+        .odd-change.flat { color: #999; }
+        .pool-label { font-size: 11px; color: #888; margin-bottom: 6px; font-weight: 600; }
+        .pool-section { border-top: 1px solid #f0f0f0; padding-top: 12px; margin-top: 8px; }
+        .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+        .status-selling { background: #d4edda; color: #155724; }
+        .status-stopped { background: #f8d7da; color: #721c24; }
+        .loading { text-align: center; padding: 60px; color: #999; font-size: 16px; }
+        .empty { text-align: center; padding: 40px; color: #ccc; }
+        .stats { display: flex; gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: #fff; border-radius: 8px; padding: 16px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #e74c3c; }
+        .stat-label { font-size: 12px; color: #999; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>竞彩赛事数据</h1>
+        <p>数据来源：竞彩网 sporttery.cn | 实时爬取入库</p>
+    </div>
+    <div class="container">
+        <div class="stats" id="stats">
+            <div class="stat-card"><div class="stat-value" id="statFootball">0</div><div class="stat-label">竞彩足球</div></div>
+            <div class="stat-card"><div class="stat-value" id="statBasketball">0</div><div class="stat-label">竞彩篮球</div></div>
+            <div class="stat-card"><div class="stat-value" id="statTotal">0</div><div class="stat-label">赛事总数</div></div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-type="227" onclick="switchTab('227')">竞彩足球</div>
+            <div class="tab" data-type="228" onclick="switchTab('228')">竞彩篮球</div>
+        </div>
+
+        <div class="sub-tabs" id="subTabs"></div>
+
+        <div id="matchList" class="match-list">
+            <div class="loading">加载中...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/v1';
+        let currentType = '227';
+        let currentSubType = '';
+        let allMatches = [];
+
+        const FOOTBALL_SUBTYPES = {
+            '6': '胜平负',
+            '1': '让球胜平负',
+            '2': '总进球',
+            '3': '比分',
+            '4': '半全场'
+        };
+
+        const BASKETBALL_SUBTYPES = {
+            '1': '胜负',
+            '2': '让分胜负',
+            '3': '胜分差',
+            '4': '大小分'
+        };
+
+        const BET_CODE_LABELS = {
+            'H': '主胜', 'D': '平', 'A': '客胜',
+            'HH': '主胜', 'HD': '平', 'HA': '客胜',
+            '0': '0球', '1': '1球', '2': '2球', '3': '3球', '4': '4球', '5': '5球', '6': '6球', '7': '7+球',
+            '00': '胜胜', '01': '胜平', '03': '胜负', '10': '平胜', '11': '平平', '13': '平负', '30': '负胜', '31': '负平', '33': '负负',
+            '1': '主胜', '2': '客胜',
+            '01': '1-5', '02': '6-10', '03': '11-15', '04': '16-20', '05': '21-25', '06': '26+',
+            'L': '小分', 'H': '大分'
+        };
+
+        function getBetLabel(subType, code) {
+            if (currentType === '227') {
+                if (subType === '6' || subType === '1') return BET_CODE_LABELS[code] || code;
+                if (subType === '2') return code + '球';
+                if (subType === '3') return code;
+                if (subType === '4') return BET_CODE_LABELS[code] || code;
+            } else {
+                if (subType === '1') return code === 'H' ? '主胜' : '客胜';
+                if (subType === '2') return code === 'H' ? '主胜' : '客胜';
+                if (subType === '3') return code;
+                if (subType === '4') return code === 'H' ? '大分' : '小分';
+            }
+            return code;
+        }
+
+        function changeArrow(change) {
+            if (change === '1') return '<span class="odd-change up">↑</span>';
+            if (change === '-1') return '<span class="odd-change down">↓</span>';
+            return '<span class="odd-change flat">—</span>';
+        }
+
+        function switchTab(type) {
+            currentType = type;
+            currentSubType = '';
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.type === type));
+            renderSubTabs();
+            fetchData();
+        }
+
+        function renderSubTabs() {
+            const subs = currentType === '227' ? FOOTBALL_SUBTYPES : BASKETBALL_SUBTYPES;
+            const container = document.getElementById('subTabs');
+            container.innerHTML = '<div class="sub-tab active" onclick="filterSubType(\'\')">全部</div>' +
+                Object.entries(subs).map(([k, v]) =>
+                    `<div class="sub-tab" onclick="filterSubType('${k}')">${v}</div>`
+                ).join('');
+        }
+
+        function filterSubType(subType) {
+            currentSubType = subType;
+            document.querySelectorAll('.sub-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.sub === subType || (t.textContent === '全部' && subType === ''));
+            });
+            renderMatches();
+        }
+
+        async function fetchData() {
+            document.getElementById('matchList').innerHTML = '<div class="loading">加载中...</div>';
+            try {
+                const resp = await fetch(`${API_BASE}/lottery/match/bet-list?lotteryType=${currentType}`);
+                const data = await resp.json();
+                allMatches = data.list || [];
+
+                const fb = await fetch(`${API_BASE}/lottery/match/bet-list?lotteryType=227`);
+                const fbData = await fb.json();
+                const bk = await fetch(`${API_BASE}/lottery/match/bet-list?lotteryType=228`);
+                const bkData = await bk.json();
+
+                document.getElementById('statFootball').textContent = (fbData.list || []).length;
+                document.getElementById('statBasketball').textContent = (bkData.list || []).length;
+                document.getElementById('statTotal').textContent = (fbData.list || []).length + (bkData.list || []).length;
+
+                renderMatches();
+            } catch (err) {
+                document.getElementById('matchList').innerHTML = `<div class="empty">加载失败: ${err.message}</div>`;
+            }
+        }
+
+        function renderMatches() {
+            const container = document.getElementById('matchList');
+            if (!allMatches || allMatches.length === 0) {
+                container.innerHTML = '<div class="empty">暂无赛事数据</div>';
+                return;
+            }
+
+            container.innerHTML = allMatches.map(m => {
+                let betInfos = m.lotteryInfo.betInfos || [];
+                if (currentSubType) {
+                    betInfos = betInfos.filter(b => b.subType === currentSubType);
+                }
+                if (betInfos.length === 0) return '';
+
+                const isSelling = !m.lotteryInfo.isStopSell;
+                const statusClass = isSelling ? 'status-selling' : 'status-stopped';
+                const statusText = isSelling ? '在售' : '停售';
+
+                let oddsHtml = betInfos.map(bi => {
+                    const options = bi.options || [];
+                    if (options.length === 0) return '';
+                    const poolName = currentType === '227'
+                        ? FOOTBALL_SUBTYPES[bi.subType] || bi.subType
+                        : BASKETBALL_SUBTYPES[bi.subType] || bi.subType;
+
+                    const handicap = bi.handicap && bi.handicap !== 0 ? `(让${bi.handicap > 0 ? '+' : ''}${bi.handicap})` : '';
+
+                    const oddsItems = options.map(opt => `
+                        <div class="odd-item">
+                            <div class="odd-label">${getBetLabel(bi.subType, opt.betCode)}</div>
+                            <div class="odd-value">${opt.odds.toFixed(2)}</div>
+                            ${changeArrow(opt.change)}
+                        </div>
+                    `).join('');
+
+                    return `<div class="pool-section">
+                        <div class="pool-label">${poolName} ${handicap}</div>
+                        <div class="odds-grid">${oddsItems}</div>
+                    </div>`;
+                }).join('');
+
+                return `<div class="match-card">
+                    <div class="match-header">
+                        <div class="league-info">
+                            <span class="league-badge">${m.tournamentInfo.cnAlias || m.tournamentInfo.cnName || ''}</span>
+                            <span class="league-name">${m.tournamentInfo.cnName || ''}</span>
+                            <span class="match-code">${m.lotteryInfo.matchCode || ''}</span>
+                        </div>
+                        <div>
+                            <span class="match-time">${m.matchInfo.matchTimeStr || ''}</span>
+                            <span class="status-badge ${statusClass}" style="margin-left:8px">${statusText}</span>
+                        </div>
+                    </div>
+                    <div class="teams">
+                        <div class="team">
+                            <div class="team-name">${m.homeTeamInfo.cnName || m.homeTeamInfo.cnAlias}</div>
+                            <div class="team-rank">${m.homeTeamInfo.rank || m.homeTeamInfo.tournamentRank || ''}</div>
+                        </div>
+                        <div class="vs">VS</div>
+                        <div class="team">
+                            <div class="team-name">${m.awayTeamInfo.cnName || m.awayTeamInfo.cnAlias}</div>
+                            <div class="team-rank">${m.awayTeamInfo.rank || m.awayTeamInfo.tournamentRank || ''}</div>
+                        </div>
+                    </div>
+                    ${oddsHtml}
+                </div>`;
+            }).join('') || '<div class="empty">当前筛选无赛事数据</div>';
+        }
+
+        renderSubTabs();
+        fetchData();
+    </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Binaries
+spider
+server
+*.exe
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Config
+configs/.env
+
+# Data
+pgdata/
+*.db
+
+# Logs
+*.log
