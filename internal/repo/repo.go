@@ -4,12 +4,34 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"sport_game2/internal/adapter/apifox"
 
 	_ "github.com/lib/pq"
 )
+
+var shanghaiLoc = time.FixedZone("CST", 8*3600)
+
+func joinScore(home, away string) string {
+	if home == "" && away == "" {
+		return ""
+	}
+	return home + ":" + away
+}
+
+func splitScore(raw string) (string, string) {
+	if raw == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(raw, ":", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return raw, ""
+}
 
 type DB struct {
 	*sql.DB
@@ -65,8 +87,26 @@ func (db *DB) UpsertMatch(m apifox.MatchBetInfo) error {
 }
 
 func (db *DB) UpsertMatchResult(r apifox.DrawInfoReply) error {
+	if !hasSubType(r.GameDrawList, "1") {
+		handicap := db.getMatchHandicap(r.MatchID)
+		if handicap != 0 {
+			homeScore := r.HomeTeamScore.Score
+			awayScore := r.AwayTeamScore.Score
+			if result, h := calcHHADResult(homeScore, awayScore, fmt.Sprintf("%g", handicap)); result != "" {
+				r.GameDrawList = append(r.GameDrawList, apifox.GameDrawInfo{
+					SubType:  "1",
+					BetCode:  result,
+					Odds:     0,
+					Handicap: h,
+				})
+			}
+		}
+	}
+
 	gameDraw, _ := json.Marshal(r.GameDrawList)
 	rawData, _ := json.Marshal(r)
+	normalTimeScore := joinScore(r.HomeTeamScore.NormalTimeScore, r.AwayTeamScore.NormalTimeScore)
+	halfTimeScore := joinScore(r.HomeTeamScore.HalfTimeScore, r.AwayTeamScore.HalfTimeScore)
 	_, err := db.Exec(`
 		INSERT INTO match_results (match_id, match_code, issue, match_time_str, week_day,
 			home_team_name, away_team_name, league_name,
@@ -76,6 +116,8 @@ func (db *DB) UpsertMatchResult(r apifox.DrawInfoReply) error {
 		ON CONFLICT (match_id) DO UPDATE SET
 			home_score = EXCLUDED.home_score,
 			away_score = EXCLUDED.away_score,
+			normal_time_score = EXCLUDED.normal_time_score,
+			half_time_score = EXCLUDED.half_time_score,
 			is_valid = EXCLUDED.is_valid,
 			game_draw_list = EXCLUDED.game_draw_list,
 			raw_data = EXCLUDED.raw_data,
@@ -84,13 +126,22 @@ func (db *DB) UpsertMatchResult(r apifox.DrawInfoReply) error {
 		r.MatchID, r.MatchCode, "", r.MatchTimeStr, r.WeekDay,
 		r.HomeTeamInfo.CnName, r.AwayTeamInfo.CnName, r.TournamentInfo.CnName,
 		r.HomeTeamScore.Score, r.AwayTeamScore.Score,
-		r.HomeTeamScore.NormalTimeScore, r.HomeTeamScore.HalfTimeScore,
+		normalTimeScore, halfTimeScore,
 		r.IsValid, string(gameDraw), string(rawData),
 	)
 	if err != nil {
 		return fmt.Errorf("upsert result: %w", err)
 	}
 	return nil
+}
+
+func (db *DB) getMatchHandicap(matchID string) float64 {
+	var betInfosJSON sql.NullString
+	err := db.QueryRow(`SELECT bet_infos FROM matches WHERE match_id = $1 AND lottery_type = '227'`, matchID).Scan(&betInfosJSON)
+	if err != nil || !betInfosJSON.Valid {
+		return 0
+	}
+	return getHHADHandicap(betInfosJSON.String)
 }
 
 func (db *DB) GetMatchBetList(lotteryType, subType string) ([]apifox.MatchBetInfo, error) {
@@ -238,14 +289,26 @@ func (db *DB) GetMatchById(matchId string) (*apifox.MatchBetInfo, error) {
 }
 
 func (db *DB) GetDrawList() ([]apifox.LotteryDrawHomeInfo, error) {
-	query := `SELECT match_id, match_code, match_time_str, week_day,
-		home_team_name, away_team_name, league_name,
-		home_score, away_score, normal_time_score, half_time_score,
-		is_valid, game_draw_list, lottery_type
-		FROM match_results WHERE is_valid = true
-		ORDER BY match_time_str DESC LIMIT 50`
+	now := time.Now().In(shanghaiLoc)
+	fromTime := now.AddDate(0, 0, -1).Format("2006-01-02") + " 11:00:00"
+	toTime := now.Format("2006-01-02") + " 11:00:01"
+	yesterdayDate := now.AddDate(0, 0, -1).Format("2006-01-02")
+	query := `SELECT mr.match_id, mr.match_code, mr.match_time_str, mr.week_day,
+		mr.home_team_name, mr.away_team_name, mr.league_name,
+		mr.home_score, mr.away_score, mr.normal_time_score, mr.half_time_score,
+		mr.is_valid, mr.game_draw_list, mr.lottery_type,
+		m.home_team_logo, m.away_team_logo, m.bet_infos
+		FROM match_results mr
+		LEFT JOIN matches m ON mr.match_id = m.match_id AND m.lottery_type = '227'
+		WHERE mr.is_valid = true
+		  AND (
+		    (m.match_id IS NOT NULL AND m.match_time_str >= $1 AND m.match_time_str < $2)
+		    OR
+		    (m.match_id IS NULL AND mr.match_time_str >= $3)
+		  )
+		ORDER BY COALESCE(m.match_time_str, mr.match_time_str) DESC LIMIT 50`
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, fromTime, toTime, yesterdayDate)
 	if err != nil {
 		return nil, fmt.Errorf("query results: %w", err)
 	}
@@ -256,20 +319,30 @@ func (db *DB) GetDrawList() ([]apifox.LotteryDrawHomeInfo, error) {
 		var d apifox.DrawInfoReply
 		var gameDrawJSON string
 		var lotteryType string
+		var normalTimeScoreRaw, halfTimeScoreRaw string
+		var betInfosJSON sql.NullString
 
 		err := rows.Scan(
 			&d.MatchID, &d.MatchCode, &d.MatchTimeStr, &d.WeekDay,
 			&d.HomeTeamInfo.CnName, &d.AwayTeamInfo.CnName, &d.TournamentInfo.CnName,
 			&d.HomeTeamScore.Score, &d.AwayTeamScore.Score,
-			&d.HomeTeamScore.NormalTimeScore, &d.HomeTeamScore.HalfTimeScore,
+			&normalTimeScoreRaw, &halfTimeScoreRaw,
 			&d.IsValid, &gameDrawJSON, &lotteryType,
+			&d.HomeTeamInfo.LogoURL, &d.AwayTeamInfo.LogoURL,
+			&betInfosJSON,
 		)
 		if err != nil {
 			continue
 		}
+
+		d.HomeTeamScore.NormalTimeScore, d.AwayTeamScore.NormalTimeScore = splitScore(normalTimeScoreRaw)
+		d.HomeTeamScore.HalfTimeScore, d.AwayTeamScore.HalfTimeScore = splitScore(halfTimeScoreRaw)
+
 		if err := json.Unmarshal([]byte(gameDrawJSON), &d.GameDrawList); err != nil {
 			continue
 		}
+
+		d.GameDrawList = enrichRQSPF(d.GameDrawList, d.HomeTeamScore.Score, d.AwayTeamScore.Score, normalTimeScoreRaw, betInfosJSON)
 
 		list = append(list, apifox.LotteryDrawHomeInfo{
 			LotteryType:  lotteryType,
@@ -277,6 +350,77 @@ func (db *DB) GetDrawList() ([]apifox.LotteryDrawHomeInfo, error) {
 		})
 	}
 	return list, nil
+}
+
+func hasSubType(list []apifox.GameDrawInfo, subType string) bool {
+	for i := range list {
+		if list[i].SubType == subType {
+			return true
+		}
+	}
+	return false
+}
+
+func parseScores(homeScoreRaw, awayScoreRaw, normalTimeScoreRaw string) (string, string) {
+	if awayScoreRaw != "" {
+		return homeScoreRaw, awayScoreRaw
+	}
+	home, away := splitScore(homeScoreRaw)
+	if away != "" {
+		return home, away
+	}
+	return splitScore(normalTimeScoreRaw)
+}
+
+func getHHADHandicap(betInfosJSON string) float64 {
+	var betInfos []apifox.BetInfo
+	if err := json.Unmarshal([]byte(betInfosJSON), &betInfos); err != nil {
+		return 0
+	}
+	for i := range betInfos {
+		if betInfos[i].SubType == "1" {
+			return betInfos[i].Handicap
+		}
+	}
+	return 0
+}
+
+func calcHHADResult(homeScore, awayScore, goalLine string) (string, float64) {
+	if homeScore == "" || awayScore == "" || goalLine == "" {
+		return "", 0
+	}
+	home, errH := strconv.ParseFloat(homeScore, 64)
+	away, errA := strconv.ParseFloat(awayScore, 64)
+	handicap, errG := strconv.ParseFloat(goalLine, 64)
+	if errH != nil || errA != nil || errG != nil {
+		return "", 0
+	}
+	adjusted := home + handicap
+	switch {
+	case adjusted > away:
+		return "3", handicap
+	case adjusted < away:
+		return "0", handicap
+	default:
+		return "1", handicap
+	}
+}
+
+func enrichRQSPF(gameDrawList []apifox.GameDrawInfo, homeScoreRaw, awayScoreRaw, normalTimeScoreRaw string, betInfosJSON sql.NullString) []apifox.GameDrawInfo {
+	if hasSubType(gameDrawList, "1") || !betInfosJSON.Valid {
+		return gameDrawList
+	}
+	handicap := getHHADHandicap(betInfosJSON.String)
+	homeScore, awayScore := parseScores(homeScoreRaw, awayScoreRaw, normalTimeScoreRaw)
+	if result, h := calcHHADResult(homeScore, awayScore, fmt.Sprintf("%g", handicap)); result != "" {
+		gameDrawList = append(gameDrawList, apifox.GameDrawInfo{
+			SubType:  "1",
+			BetCode:  result,
+			Odds:     0,
+			Handicap: h,
+		})
+	}
+	return gameDrawList
 }
 
 func (db *DB) LogSpiderJob(jobType string, status string, count int, errMsg string) {

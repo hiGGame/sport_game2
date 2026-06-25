@@ -3,6 +3,7 @@ package result
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"sport_game2/internal/adapter/apifox"
 	"sport_game2/internal/model"
@@ -139,15 +140,51 @@ func (s *Service) GetMatchPrediction(matchID string) (*MatchPredictionView, erro
 
 	var drawInfo *apifox.DrawInfoReply
 	resultData, _ := s.matchRepo.GetMatchResult(matchID)
+	matchData, _ := s.matchRepo.GetMatchById(matchID)
 	if resultData != nil && resultData.IsValid {
+		homeLogo, awayLogo := "", ""
+		homeTeamAlias, awayTeamAlias := "", ""
+		homeTeamID, awayTeamID := "", ""
+		if matchData != nil {
+			homeLogo = matchData.HomeTeamInfo.LogoURL
+			awayLogo = matchData.AwayTeamInfo.LogoURL
+			homeTeamAlias = matchData.HomeTeamInfo.CnAlias
+			awayTeamAlias = matchData.AwayTeamInfo.CnAlias
+			homeTeamID = matchData.HomeTeamInfo.ID
+			awayTeamID = matchData.AwayTeamInfo.ID
+		}
+
+		homeNT, awayNT := splitScore(resultData.NormalTimeScore)
+		homeHT, awayHT := splitScore(resultData.HalfTimeScore)
+
 		drawInfo = &apifox.DrawInfoReply{
 			MatchID:      resultData.MatchID,
 			MatchCode:    resultData.MatchCode,
 			MatchTimeStr: resultData.MatchTimeStr,
 			WeekDay:      resultData.WeekDay,
-			HomeTeamInfo: apifox.TeamInfo{CnName: resultData.HomeTeamName},
-			AwayTeamInfo: apifox.TeamInfo{CnName: resultData.AwayTeamName},
-			IsValid:      resultData.IsValid,
+			HomeTeamInfo: apifox.TeamInfo{
+				CnName:  resultData.HomeTeamName,
+				CnAlias: homeTeamAlias,
+				LogoURL: homeLogo,
+				ID:      homeTeamID,
+			},
+			AwayTeamInfo: apifox.TeamInfo{
+				CnName:  resultData.AwayTeamName,
+				CnAlias: awayTeamAlias,
+				LogoURL: awayLogo,
+				ID:      awayTeamID,
+			},
+			IsValid: resultData.IsValid,
+			HomeTeamScore: apifox.MatchScore{
+				Score:           resultData.HomeScore,
+				NormalTimeScore: homeNT,
+				HalfTimeScore:   homeHT,
+			},
+			AwayTeamScore: apifox.MatchScore{
+				Score:           resultData.AwayScore,
+				NormalTimeScore: awayNT,
+				HalfTimeScore:   awayHT,
+			},
 		}
 		var gameDraws []apifox.GameDrawInfo
 		if json.Unmarshal([]byte(resultData.GameDrawJSON), &gameDraws) == nil {
@@ -196,4 +233,15 @@ func (s *Service) SettleMatch(matchID string) (*SettlementResult, error) {
 		return nil, err
 	}
 	return &SettlementResult{MatchID: matchID, Settled: n}, nil
+}
+
+func splitScore(raw string) (string, string) {
+	if raw == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(raw, ":", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return raw, ""
 }

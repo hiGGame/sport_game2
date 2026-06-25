@@ -3,6 +3,7 @@ package sporttery
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -197,6 +198,17 @@ func Today() string {
 
 func DateOffset(days int) string {
 	return time.Now().AddDate(0, 0, days).Format("2006-01-02")
+}
+
+func parseScore(raw string) (string, string) {
+	if raw == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(raw, ":", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return raw, ""
 }
 
 // mapBetCode converts sporttery H/D/A to 3/1/0.

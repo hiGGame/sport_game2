@@ -37,8 +37,12 @@ type DatabaseConfig struct {
 }
 
 func (d DatabaseConfig) DSN() string {
-	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode)
+	dsn := fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=%s",
+		d.Host, d.Port, d.User, d.DBName, d.SSLMode)
+	if d.Password != "" {
+		dsn += fmt.Sprintf(" password=%s", d.Password)
+	}
+	return dsn
 }
 
 type JWTConfig struct {

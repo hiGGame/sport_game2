@@ -307,19 +307,29 @@ func rawToMatchBetInfo(subType, poolCode string, rm *RawMatch) apifox.MatchBetIn
 }
 
 func rawToDrawInfo(rr *RawResult) apifox.DrawInfoReply {
+	homeFT, awayFT := parseScore(rr.SectionsNo999)
+	homeHT, awayHT := parseScore(rr.SectionsNo1)
+
 	var gameDrawList []apifox.GameDrawInfo
 
 	hadResult := mapBetCode(rr.WinFlag)
-	hadOdds := 0.0
-	if rr.H != "" {
-		hadOdds = parseFloat64(rr.H)
-	}
 	if hadResult != "" {
+		hadOdds := pickOdds(rr.WinFlag, rr.H, rr.D, rr.A)
 		gameDrawList = append(gameDrawList, apifox.GameDrawInfo{
 			SubType: pkgSporttery.FootSubHAD,
 			BetCode: hadResult,
 			Odds:    hadOdds,
 		})
+
+		hhadResult, hhadHandicap := calcHHAD(homeFT, awayFT, rr.GoalLine)
+		if hhadResult != "" {
+			gameDrawList = append(gameDrawList, apifox.GameDrawInfo{
+				SubType:  pkgSporttery.FootSubHHAD,
+				BetCode:  hhadResult,
+				Odds:     0,
+				Handicap: hhadHandicap,
+			})
+		}
 	}
 
 	return apifox.DrawInfoReply{
@@ -344,9 +354,14 @@ func rawToDrawInfo(rr *RawResult) apifox.DrawInfoReply {
 		},
 		IsValid: rr.MatchResultStatus == "2",
 		HomeTeamScore: apifox.MatchScore{
-			Score:           rr.SectionsNo999,
-			NormalTimeScore: rr.SectionsNo999,
-			HalfTimeScore:   rr.SectionsNo1,
+			Score:           homeFT,
+			NormalTimeScore: homeFT,
+			HalfTimeScore:   homeHT,
+		},
+		AwayTeamScore: apifox.MatchScore{
+			Score:           awayFT,
+			NormalTimeScore: awayFT,
+			HalfTimeScore:   awayHT,
 		},
 		GameDrawList: gameDrawList,
 	}
@@ -390,6 +405,39 @@ func parseFloat64(s string) float64 {
 	}
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
+}
+
+func pickOdds(winFlag string, h, d, a string) float64 {
+	switch winFlag {
+	case "H":
+		return parseFloat64(h)
+	case "D":
+		return parseFloat64(d)
+	case "A":
+		return parseFloat64(a)
+	}
+	return 0
+}
+
+func calcHHAD(homeScore, awayScore, goalLine string) (string, float64) {
+	if homeScore == "" || awayScore == "" || goalLine == "" {
+		return "", 0
+	}
+	home, errH := strconv.ParseFloat(homeScore, 64)
+	away, errA := strconv.ParseFloat(awayScore, 64)
+	handicap, errG := strconv.ParseFloat(goalLine, 64)
+	if errH != nil || errA != nil || errG != nil {
+		return "", 0
+	}
+	adjusted := home + handicap
+	switch {
+	case adjusted > away:
+		return "3", handicap
+	case adjusted < away:
+		return "0", handicap
+	default:
+		return "1", handicap
+	}
 }
 
 var _ json.Number

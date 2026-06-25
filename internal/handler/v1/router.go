@@ -49,7 +49,7 @@ func (r *Router) Register(rg *gin.RouterGroup) {
 		authed.POST("/lottery/bet/create", r.betHandler.CreateBet)
 		authed.GET("/lottery/bet/mine", r.betHandler.GetUserPredictions)
 		authed.POST("/lottery/bet/share", r.betHandler.ShareSuccess)
-		authed.GET("/lottery/pk/yesterday", r.betHandler.DailyPK)
+		authed.GET("/lottery/pk", r.betHandler.DailyPK)
 		authed.POST("/matches/:matchId/settle", r.resultHandler.SettleMatch)
 	}
 }

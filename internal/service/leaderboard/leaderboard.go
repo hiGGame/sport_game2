@@ -3,8 +3,7 @@ package leaderboard
 import "sport_game2/internal/repo"
 
 type store interface {
-	GetExperts() ([]repo.Expert, error)
-	GetSettledExpertPreds(expertID int64) ([]repo.ExpertPrediction, error)
+	GetUserByOpenID(openID string) (*repo.User, error)
 	GetTopUsers(limit int) ([]repo.User, error)
 	GetSettledUserPreds(userID int64) ([]repo.Prediction, error)
 	GetAIPredStats() (total, correct int, err error)
@@ -28,17 +27,37 @@ type LeaderboardEntry struct {
 	BestStreak int     `json:"bestStreak"`
 }
 
+const (
+	robotExpertOpenID = "robot_expert"
+	expertDisplayName = "老委鬼"
+	expertAvatar      = "/web/avatar/expert/weiguitx.jpg"
+)
+
 func (s *Service) GetLeaderboard() ([]LeaderboardEntry, error) {
 	var entries []LeaderboardEntry
 
-	entries = append(entries, LeaderboardEntry{
-		Name:       "老委鬼",
-		Role:       "expert",
-		Avatar:     "/static/avatars/expert/weiguitx.jpg",
-		Accuracy:   72.5,
-		Wins:       342,
-		BestStreak: 12,
-	})
+	expertUser, _ := s.repo.GetUserByOpenID(robotExpertOpenID)
+	if expertUser != nil {
+		preds, _ := s.repo.GetSettledUserPreds(expertUser.ID)
+		wins := 0
+		for _, p := range preds {
+			if p.IsCorrect != nil && *p.IsCorrect {
+				wins++
+			}
+		}
+		accuracy := 0.0
+		if len(preds) > 0 {
+			accuracy = float64(wins) / float64(len(preds)) * 100
+		}
+		entries = append(entries, LeaderboardEntry{
+			Name:       expertDisplayName,
+			Role:       "expert",
+			Avatar:     expertAvatar,
+			Accuracy:   accuracy,
+			Wins:       wins,
+			BestStreak: calcStreak(preds),
+		})
+	}
 
 	totalA, correctA, _ := s.repo.GetAIPredStats()
 	aiPreds, _ := s.repo.GetSettledAIPreds()
@@ -80,14 +99,14 @@ func (s *Service) GetLeaderboard() ([]LeaderboardEntry, error) {
 			Avatar:     avatar,
 			Accuracy:   accuracy,
 			Wins:       wins,
-			BestStreak: calcStreakUser(userPreds),
+			BestStreak: calcStreak(userPreds),
 		})
 	}
 
 	return entries, nil
 }
 
-func calcStreakExpert(preds []repo.ExpertPrediction) int {
+func calcStreak(preds []repo.Prediction) int {
 	maxStreak, cur := 0, 0
 	for _, p := range preds {
 		if p.IsCorrect != nil && *p.IsCorrect {
@@ -106,21 +125,6 @@ func calcStreakAI(preds []repo.Prediction) int {
 	maxStreak, cur := 0, 0
 	for _, p := range preds {
 		if p.Status == "won" {
-			cur++
-			if cur > maxStreak {
-				maxStreak = cur
-			}
-		} else {
-			cur = 0
-		}
-	}
-	return maxStreak
-}
-
-func calcStreakUser(preds []repo.Prediction) int {
-	maxStreak, cur := 0, 0
-	for _, p := range preds {
-		if p.IsCorrect != nil && *p.IsCorrect {
 			cur++
 			if cur > maxStreak {
 				maxStreak = cur

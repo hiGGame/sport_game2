@@ -46,8 +46,8 @@ const (
 	defaultPoints      = 2
 	shareBonus         = 2
 
-	// PKTimezone 是每日 PK "昨天" 判定使用的固定时区。
-	// settled_at::date 在数据库侧按 DB 时区切分,这里显式指定时区以保证两端一致。
+	// PKTimezone 是每日 PK "昨天" 判定使用的固定时区 (Asia/Shanghai)。
+	// Go 端用此 loc 计算 yesterday;SQL 端也必须用 AT TIME ZONE 'Asia/Shanghai' 切日,两端才能对齐。
 	PKTimezone = "Asia/Shanghai"
 
 	// 机器人用户在 users.open_id 中的业务标识。由 ensureRobotUser 保底创建,
@@ -343,7 +343,7 @@ func (s *Service) GetDailyPK(userID int64) (*DailyPKResponse, error) {
 		return nil, fmt.Errorf("get ai settled predictions: %w", err)
 	}
 
-	_, userWins := countWins(userPreds)
+	userTotal, userWins := countWins(userPreds)
 	expertTotal, expertWins := countWins(expertPreds)
 	aiTotal, aiWins := countWins(aiPreds)
 
@@ -355,7 +355,7 @@ func (s *Service) GetDailyPK(userID int64) (*DailyPKResponse, error) {
 	}
 
 	resp := &DailyPKResponse{
-		UserTotal:      len(userPreds),
+		UserTotal:      userTotal,
 		UserWins:       userWins,
 		UserAccuracy:   acc(userWins, len(userPreds)),
 		ExpertTotal:    expertTotal,

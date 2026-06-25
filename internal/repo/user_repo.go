@@ -207,8 +207,20 @@ func (db *DB) SettlePrediction(id int64, isCorrect bool) error {
 	if isCorrect {
 		status = "won"
 	}
-	_, err := db.Exec("UPDATE predictions SET status = $1, is_correct = $2, settled_at = NOW() WHERE id = $3", status, isCorrect, id)
-	return err
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("UPDATE predictions SET status = $1, is_correct = $2, settled_at = NOW() WHERE id = $3", status, isCorrect, id); err != nil {
+		return fmt.Errorf("update prediction: %w", err)
+	}
+	if isCorrect {
+		if _, err := tx.Exec("UPDATE users SET wins = wins + 1 WHERE id = (SELECT user_id FROM predictions WHERE id = $1)", id); err != nil {
+			return fmt.Errorf("update user wins: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 func (db *DB) SettleExpertPredictions(matchID string, drawMap map[string]string) error {
@@ -254,25 +266,32 @@ func (db *DB) SettleAllForMatch(matchID string) (int, error) {
 	}
 
 	settled := 0
-	rows, err := db.Query(`SELECT id, sub_type, bet_code FROM predictions WHERE match_id = $1 AND status = 'pending'`, matchID)
+	rows, err := db.Query(`SELECT id, user_id, sub_type, bet_code FROM predictions WHERE match_id = $1 AND status = 'pending'`, matchID)
 	if err != nil {
 		return 0, fmt.Errorf("query pending predictions: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-			var id int64
-			var subType, betCode string
-			if err := rows.Scan(&id, &subType, &betCode); err != nil {
-				continue
+		var id int64
+		var userID int64
+		var subType, betCode string
+		if err := rows.Scan(&id, &userID, &subType, &betCode); err != nil {
+			continue
+		}
+		actualCode, ok := drawMap[subType]
+		isCorrect := ok && betCode == actualCode
+		status := "lost"
+		if isCorrect {
+			status = "won"
+		}
+		if _, err := db.Exec("UPDATE predictions SET status = $1, is_correct = $2, settled_at = NOW() WHERE id = $3", status, isCorrect, id); err != nil {
+			continue
+		}
+		settled++
+		if isCorrect {
+			if _, err := db.Exec("UPDATE users SET wins = wins + 1 WHERE id = $1", userID); err != nil {
+				return settled, fmt.Errorf("update user wins: %w", err)
 			}
-			actualCode, ok := drawMap[subType]
-			isCorrect := ok && betCode == actualCode
-			status := "lost"
-			if isCorrect {
-				status = "won"
-			}
-		if _, err := db.Exec("UPDATE predictions SET status = $1, is_correct = $2, settled_at = NOW() WHERE id = $3", status, isCorrect, id); err == nil {
-			settled++
 		}
 	}
 
@@ -367,10 +386,11 @@ func (db *DB) GetMatchResult(matchID string) (*DrawResultData, error) {
 	var d DrawResultData
 	var gameDrawJSON string
 	err := db.QueryRow(`SELECT match_id, match_code, match_time_str, week_day, home_team_name, away_team_name, league_name,
-		home_score, away_score, is_valid, game_draw_list, lottery_type
+		home_score, away_score, normal_time_score, half_time_score, is_valid, game_draw_list, lottery_type
 		FROM match_results WHERE match_id = $1`, matchID).
 		Scan(&d.MatchID, &d.MatchCode, &d.MatchTimeStr, &d.WeekDay, &d.HomeTeamName, &d.AwayTeamName, &d.LeagueName,
-			&d.HomeScore, &d.AwayScore, &d.IsValid, &gameDrawJSON, &d.LotteryType)
+			&d.HomeScore, &d.AwayScore, &d.NormalTimeScore, &d.HalfTimeScore,
+			&d.IsValid, &gameDrawJSON, &d.LotteryType)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -479,7 +499,7 @@ func (db *DB) GetSettledAIPreds() ([]Prediction, error) {
 
 func (db *DB) GetSettledByOpenID(openID, date string) ([]Prediction, error) {
 	rows, err := db.Query(`SELECT id, user_id, match_id, lottery_type, match_code, sub_type, bet_code, handicap, points, status, is_correct
-		FROM predictions WHERE user_id = (SELECT id FROM users WHERE open_id = $1) AND settled_at::date = $2 AND status IN ('won','lost')`, openID, date)
+		FROM predictions WHERE user_id = (SELECT id FROM users WHERE open_id = $1) AND (settled_at AT TIME ZONE 'Asia/Shanghai')::date = $2 AND status IN ('won','lost') AND is_correct IS NOT NULL`, openID, date)
 	if err != nil {
 		return nil, fmt.Errorf("get settled predictions by openID: %w", err)
 	}
@@ -500,7 +520,7 @@ func (db *DB) GetSettledByOpenID(openID, date string) ([]Prediction, error) {
 
 func (db *DB) GetSettledByUserID(userID int64, date string) ([]Prediction, error) {
 	rows, err := db.Query(`SELECT id, user_id, match_id, lottery_type, match_code, sub_type, bet_code, handicap, points, status, is_correct
-		FROM predictions WHERE user_id = $1 AND settled_at::date = $2 AND status IN ('won','lost')`, userID, date)
+		FROM predictions WHERE user_id = $1 AND (settled_at AT TIME ZONE 'Asia/Shanghai')::date = $2 AND status IN ('won','lost') AND is_correct IS NOT NULL`, userID, date)
 	if err != nil {
 		return nil, fmt.Errorf("get settled predictions by userID: %w", err)
 	}
@@ -537,16 +557,18 @@ func (db *DB) GetRobotPredictStats(openID string) (exists bool, todayTotal, toda
 }
 
 type DrawResultData struct {
-	MatchID      string
-	MatchCode    string
-	MatchTimeStr string
-	WeekDay      string
-	HomeTeamName string
-	AwayTeamName string
-	LeagueName   string
-	HomeScore    string
-	AwayScore    string
-	IsValid      bool
-	GameDrawJSON string
-	LotteryType  string
+	MatchID           string
+	MatchCode         string
+	MatchTimeStr     string
+	WeekDay          string
+	HomeTeamName     string
+	AwayTeamName     string
+	LeagueName       string
+	HomeScore        string
+	AwayScore        string
+	NormalTimeScore  string
+	HalfTimeScore    string
+	IsValid          bool
+	GameDrawJSON     string
+	LotteryType      string
 }

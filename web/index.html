@@ -98,6 +98,7 @@
         .bet-result.success { background: #eafaf1; color: #27ae60; }
         .bet-result.error { background: #fdedec; color: #c0392b; }
         .bet-bar .login-hint { font-size: 13px; color: #999; }
+        .debug-only { display: none; }
     </style>
 </head>
 <body>
@@ -123,12 +124,12 @@
 
         <div id="betResult" class="bet-result"></div>
 
-        <div class="leaderboard" id="leaderboardPanel">
+        <div class="leaderboard debug-only" id="leaderboardPanel">
             <h3>竞猜排行榜</h3>
             <div id="lbContent" style="text-align:center;color:#999;padding:20px">加载中...</div>
         </div>
 
-        <div id="betBar" class="bet-bar">
+        <div id="betBar" class="bet-bar debug-only">
             <span class="login-hint" id="loginHint">请先在下方模拟登录</span>
             <span class="bet-info" id="betInfo" style="display:none"></span>
             <button id="betBtn" class="btn-api" disabled onclick="submitBet()">创建竞猜</button>
@@ -140,6 +141,13 @@
         let currentTab = 'odds';
         let oddsData = [];
         let resultsData = [];
+
+        const isDebug = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(window.location.hostname);
+        if (isDebug) {
+            document.addEventListener('DOMContentLoaded', function() {
+                document.querySelectorAll('.debug-only').forEach(function(el) { el.style.display = ''; });
+            });
+        }
 
         const BET_LABELS = { '3': '胜', '1': '平', '0': '负' };
 
@@ -214,6 +222,7 @@
         }
 
         function updateBetBar() {
+            if (!isDebug) return;
             const bar = document.getElementById('betBar');
             const info = document.getElementById('betInfo');
             const hint = document.getElementById('loginHint');
@@ -322,12 +331,10 @@
                 const winFlag = hadDraw ? hadDraw.betCode : '';
                 const hadOdds = hadDraw ? hadDraw.odds : 0;
 
-                const scoreParts = (d.homeTeamScore.score || '').split(':');
-                const homeScore = scoreParts[0] || '-';
-                const awayScore = scoreParts[1] || '-';
-                const halfParts = (d.homeTeamScore.halfTimeScore || '').split(':');
-                const halfHome = halfParts[0] || '-';
-                const halfAway = halfParts[1] || '-';
+                const homeScore = d.homeTeamScore.normalTimeScore || '-';
+                const awayScore = d.awayTeamScore.normalTimeScore || '-';
+                const halfHome = d.homeTeamScore.halfTimeScore || '-';
+                const halfAway = d.awayTeamScore.halfTimeScore || '-';
 
                 let oddsHtml = '';
                 if (hadDraw && hadOdds > 0) {
@@ -387,7 +394,7 @@
         }
 
         loadData();
-        fetchLeaderboard();
+        if (isDebug) fetchLeaderboard();
 
         async function fetchLeaderboard() {
             try {
@@ -452,7 +459,7 @@
     </script>
 
     <div class="container">
-        <div class="test-panel">
+        <div class="test-panel debug-only">
             <h3>接口调试面板</h3>
             <div class="row">
                 <label>用户编号:</label>
@@ -465,7 +472,7 @@
                 <button class="btn-api" disabled onclick="callApi('POST','/lottery/bet/share')">分享赚骨头</button>
                 <button class="btn-api" disabled onclick="callApi('GET','/lottery/bet/mine')">竞猜记录</button>
                 <button class="btn-api" disabled onclick="callApi('PUT','/user/info',{nickname:'测试用户',avatarUrl:''})">更新用户资料</button>
-                <button class="btn-api" disabled onclick="callApi('GET','/lottery/pk/yesterday')">每日PK</button>
+                <button class="btn-api" disabled onclick="callApi('GET','/lottery/pk')">每日PK</button>
             </div>
             <pre id="apiResponse">点击按钮查看接口响应...<br><br>创建竞猜入口: 在上方赛事赔率区点击赔率选项</pre>
         </div>
