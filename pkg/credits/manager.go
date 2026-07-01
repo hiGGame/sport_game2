@@ -12,6 +12,7 @@ var (
 
 type DB interface {
 	Begin() (*sql.Tx, error)
+	IncrementTotalBets(userID int64) error
 }
 
 type Manager struct {
@@ -101,6 +102,13 @@ func (m *Manager) Refund(userID int64, amount int, reason string, refID int64) (
 
 func (m *Manager) Award(userID int64, amount int, reason string, refID int64) (int, error) {
 	return m.Refund(userID, amount, reason, refID)
+}
+
+func (m *Manager) IncrementTotalBets(userID int64) error {
+	if err := m.db.IncrementTotalBets(userID); err != nil {
+		return fmt.Errorf("increment total bets: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) Add(userID int64, amount int, reason string) (int, error) {

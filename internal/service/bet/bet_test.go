@@ -54,7 +54,7 @@ func (f *fakeBetRepo) CheckDuplicatePrediction(userID int64, matchID, lotteryTyp
 	return false, nil
 }
 
-func (f *fakeBetRepo) GetSettledByOpenID(openID, date string) ([]repo.Prediction, error) {
+func (f *fakeBetRepo) GetSettledByOpenID(openID, fromTime, toTime string) ([]repo.Prediction, error) {
 	if f.settledByOpenErr != nil {
 		return nil, f.settledByOpenErr
 	}
@@ -66,7 +66,7 @@ func (f *fakeBetRepo) GetSettledByOpenID(openID, date string) ([]repo.Prediction
 	return nil, nil
 }
 
-func (f *fakeBetRepo) GetSettledByUserID(userID int64, date string) ([]repo.Prediction, error) {
+func (f *fakeBetRepo) GetSettledByUserID(userID int64, fromTime, toTime string) ([]repo.Prediction, error) {
 	return f.settledByUser, f.settledByUserErr
 }
 
@@ -81,6 +81,10 @@ func (f *fakeCreditsManager) Deduct(userID int64, amount int, reason string, ref
 
 func (f *fakeCreditsManager) Add(userID int64, amount int, reason string) (int, error) {
 	return f.balance + amount, f.err
+}
+
+func (f *fakeCreditsManager) IncrementTotalBets(userID int64) error {
+	return f.err
 }
 
 func TestCreateBetValid(t *testing.T) {
@@ -118,8 +122,8 @@ func TestCreateBetValid(t *testing.T) {
 	if resp.PredictionID != 100 {
 		t.Errorf("expected predID 100, got %d", resp.PredictionID)
 	}
-	if resp.BalanceAfter != 900 {
-		t.Errorf("expected balance 900, got %d", resp.BalanceAfter)
+	if resp.BalanceAfter != 0 {
+		t.Errorf("expected balance 0 (no deduction), got %d", resp.BalanceAfter)
 	}
 }
 

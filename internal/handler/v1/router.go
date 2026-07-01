@@ -40,6 +40,10 @@ func (r *Router) Register(rg *gin.RouterGroup) {
 
 	rg.POST("/customer/login/wechat", r.authHandler.LoginByWechat)
 	rg.POST("/customer/login/dev", r.authHandler.DevLogin)
+	rg.GET("/customer/login/official/redirect", r.authHandler.OfficialLoginRedirect)
+	rg.HEAD("/customer/login/official/redirect", r.authHandler.OfficialLoginRedirect)
+	rg.GET("/customer/login/official/callback", r.authHandler.OfficialLoginCallback)
+	rg.HEAD("/customer/login/official/callback", r.authHandler.OfficialLoginCallback)
 
 	authed := rg.Group("/")
 	authed.Use(middleware.JWTAuth(r.jwtManager))

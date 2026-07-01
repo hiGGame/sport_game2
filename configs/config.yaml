@@ -18,8 +18,14 @@ jwt:
   expire_hours: 168  # 7 days
 
 wechat:
-  appid: "wx941a4f72a0170537"
-  secret: "8de3b2d406356cb022e796d5da8cec5a"
+  mode: "official"  # miniapp | official — 切换当前生效的登录方式
+  miniapp:
+    appid: ""        # 通过环境变量 WECHAT_MINIAPP_APPID 注入
+    secret: ""       # 通过环境变量 WECHAT_MINIAPP_SECRET 注入
+  official:
+    appid: ""        # 通过环境变量 WECHAT_OFFICIAL_APPID 注入
+    secret: ""       # 通过环境变量 WECHAT_OFFICIAL_SECRET 注入
+  frontend_url: "http://localhost:8080"
 
 spider:
   interval_odds: 5m    # 赔率刷新间隔
@@ -34,6 +40,7 @@ spider:
 bet:
   lock_minutes_before: 60  # 开赛前 60 分钟锁定下注
   initial_credits: 2       # 新用户初始骨头数 / 每日重置骨头数
+  robot_auto_predict: true # 大拿(老委鬼)/AI狗 每日11点自动竞猜开关
 
 ai:
   provider: rule  # rule | llm

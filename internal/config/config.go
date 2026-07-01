@@ -51,6 +51,13 @@ type JWTConfig struct {
 }
 
 type WechatConfig struct {
+	Mode        string         `mapstructure:"mode"`
+	MiniApp     WechatAppCreds `mapstructure:"miniapp"`
+	Official    WechatAppCreds `mapstructure:"official"`
+	FrontendURL string         `mapstructure:"frontend_url"`
+}
+
+type WechatAppCreds struct {
 	AppID  string `mapstructure:"appid"`
 	Secret string `mapstructure:"secret"`
 }
@@ -67,8 +74,9 @@ type SpiderConfig struct {
 }
 
 type BetConfig struct {
-	LockMinutesBefore int `mapstructure:"lock_minutes_before"`
-	InitialCredits    int `mapstructure:"initial_credits"`
+	LockMinutesBefore int  `mapstructure:"lock_minutes_before"`
+	InitialCredits    int  `mapstructure:"initial_credits"`
+	RobotAutoPredict  bool `mapstructure:"robot_auto_predict"`
 }
 
 type AIConfig struct {
@@ -120,8 +128,12 @@ func bindEnvVars(v *viper.Viper) {
 		"database.dbname":     "DB_NAME",
 		"database.sslmode":    "DB_SSLMODE",
 		"jwt.secret":          "JWT_SECRET",
-		"wechat.appid":        "WECHAT_APPID",
-		"wechat.secret":       "WECHAT_SECRET",
+		"wechat.mode":              "WECHAT_MODE",
+		"wechat.miniapp.appid":     "WECHAT_MINIAPP_APPID",
+		"wechat.miniapp.secret":    "WECHAT_MINIAPP_SECRET",
+		"wechat.official.appid":    "WECHAT_OFFICIAL_APPID",
+		"wechat.official.secret":   "WECHAT_OFFICIAL_SECRET",
+		"wechat.frontend_url":      "WECHAT_FRONTEND_URL",
 		"ai.provider":         "AI_PROVIDER",
 		"ai.llm_api_key":      "LLM_API_KEY",
 		"ai.llm_base_url":     "LLM_BASE_URL",
@@ -164,11 +176,29 @@ func applyEnvOverrides(c *Config) {
 	if val := os.Getenv("JWT_SECRET"); val != "" {
 		c.JWT.Secret = val
 	}
+	if val := os.Getenv("WECHAT_MODE"); val != "" {
+		c.Wechat.Mode = val
+	}
+	if val := os.Getenv("WECHAT_MINIAPP_APPID"); val != "" {
+		c.Wechat.MiniApp.AppID = val
+	}
+	if val := os.Getenv("WECHAT_MINIAPP_SECRET"); val != "" {
+		c.Wechat.MiniApp.Secret = val
+	}
+	if val := os.Getenv("WECHAT_OFFICIAL_APPID"); val != "" {
+		c.Wechat.Official.AppID = val
+	}
+	if val := os.Getenv("WECHAT_OFFICIAL_SECRET"); val != "" {
+		c.Wechat.Official.Secret = val
+	}
+	if val := os.Getenv("WECHAT_FRONTEND_URL"); val != "" {
+		c.Wechat.FrontendURL = val
+	}
 	if val := os.Getenv("WECHAT_APPID"); val != "" {
-		c.Wechat.AppID = val
+		c.Wechat.MiniApp.AppID = val
 	}
 	if val := os.Getenv("WECHAT_SECRET"); val != "" {
-		c.Wechat.Secret = val
+		c.Wechat.MiniApp.Secret = val
 	}
 }
 

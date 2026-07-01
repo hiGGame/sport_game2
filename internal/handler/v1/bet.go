@@ -8,7 +8,6 @@ import (
 	"sport_game2/internal/errs"
 	"sport_game2/internal/middleware"
 	"sport_game2/internal/service/bet"
-	"sport_game2/pkg/credits"
 )
 
 type BetHandler struct {
@@ -45,8 +44,6 @@ func (h *BetHandler) CreateBet(c *gin.Context) {
 			middleware.AbortWithError(c, errs.New(errs.CodeValidation, err.Error(), 500))
 		case errors.Is(err, bet.ErrDuplicateBet):
 			middleware.AbortWithError(c, errs.New(errs.CodeDuplicateBet, err.Error(), 500))
-		case errors.Is(err, credits.ErrInsufficientCredits):
-			middleware.AbortWithError(c, errs.New(errs.CodeInsufficientFunds, "积分不足", 500))
 		default:
 			middleware.AbortWithError(c, err)
 		}

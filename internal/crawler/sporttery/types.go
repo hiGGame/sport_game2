@@ -192,12 +192,14 @@ func ParseTeamInfo(data []byte) (*TeamInfoResponse, error) {
 	return &resp, nil
 }
 
+var shanghaiLoc = time.FixedZone("CST", 8*3600)
+
 func Today() string {
-	return time.Now().Format("2006-01-02")
+	return time.Now().In(shanghaiLoc).Format("2006-01-02")
 }
 
 func DateOffset(days int) string {
-	return time.Now().AddDate(0, 0, days).Format("2006-01-02")
+	return time.Now().In(shanghaiLoc).AddDate(0, 0, days).Format("2006-01-02")
 }
 
 func parseScore(raw string) (string, string) {

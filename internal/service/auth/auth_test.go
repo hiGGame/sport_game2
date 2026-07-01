@@ -40,6 +40,21 @@ func (f *fakeWechatClient) Code2Session(code string) (*wechat.Code2SessionResp, 
 	return f.session, f.err
 }
 
+type fakeOfficialWechatClient struct {
+	tokenResp *wechat.OAuth2AccessTokenResp
+	tokenErr  error
+	userInfo  *wechat.UserInfoResp
+	userErr   error
+}
+
+func (f *fakeOfficialWechatClient) GetOAuth2AccessToken(code string) (*wechat.OAuth2AccessTokenResp, error) {
+	return f.tokenResp, f.tokenErr
+}
+
+func (f *fakeOfficialWechatClient) GetUserInfo(accessToken, openID string) (*wechat.UserInfoResp, error) {
+	return f.userInfo, f.userErr
+}
+
 type fakeTokenManager struct {
 	token string
 	err   error
@@ -61,7 +76,7 @@ func TestLoginNewUser(t *testing.T) {
 	}
 	tokenMgr := &fakeTokenManager{token: "test_token", err: nil}
 
-	svc := NewService(userRepo, wechatClient, tokenMgr, 1000)
+	svc := NewService(userRepo, wechatClient, nil, tokenMgr, 1000)
 
 	resp, err := svc.Login(&LoginRequest{Code: "valid_code"})
 	if err != nil {
@@ -85,7 +100,7 @@ func TestLoginExistingUser(t *testing.T) {
 	}
 	tokenMgr := &fakeTokenManager{token: "existing_token", err: nil}
 
-	svc := NewService(userRepo, wechatClient, tokenMgr, 1000)
+	svc := NewService(userRepo, wechatClient, nil, tokenMgr, 1000)
 
 	resp, err := svc.Login(&LoginRequest{Code: "valid_code"})
 	if err != nil {
@@ -109,7 +124,7 @@ func TestLoginWechatError(t *testing.T) {
 	userRepo := &fakeUserRepo{}
 	tokenMgr := &fakeTokenManager{}
 
-	svc := NewService(userRepo, wechatClient, tokenMgr, 1000)
+	svc := NewService(userRepo, wechatClient, nil, tokenMgr, 1000)
 
 	_, err := svc.Login(&LoginRequest{Code: "bad_code"})
 	if err == nil {
@@ -128,7 +143,7 @@ func TestLoginCreateUserError(t *testing.T) {
 	}
 	tokenMgr := &fakeTokenManager{}
 
-	svc := NewService(userRepo, wechatClient, tokenMgr, 1000)
+	svc := NewService(userRepo, wechatClient, nil, tokenMgr, 1000)
 
 	_, err := svc.Login(&LoginRequest{Code: "valid_code"})
 	if err == nil {
@@ -140,7 +155,7 @@ func TestGetUser(t *testing.T) {
 	userRepo := &fakeUserRepo{
 		getUser: &repo.User{ID: 1, OpenID: "test"},
 	}
-	svc := NewService(userRepo, nil, nil, 0)
+	svc := NewService(userRepo, nil, nil, nil, 0)
 
 	user, err := svc.GetUser(1)
 	if err != nil {
@@ -148,5 +163,91 @@ func TestGetUser(t *testing.T) {
 	}
 	if user.ID != 1 {
 		t.Errorf("expected id 1, got %d", user.ID)
+	}
+}
+
+func TestLoginByOfficialNewUser(t *testing.T) {
+	officialClient := &fakeOfficialWechatClient{
+		tokenResp: &wechat.OAuth2AccessTokenResp{OpenID: "official_openid", UnionID: "official_unionid", AccessToken: "access_token"},
+		userInfo:  &wechat.UserInfoResp{OpenID: "official_openid", Nickname: "OfficialUser", HeadImgURL: "http://avatar.png"},
+	}
+	userRepo := &fakeUserRepo{
+		getUser:    nil,
+		createUser: &repo.User{ID: 10, OpenID: "official_openid"},
+	}
+	tokenMgr := &fakeTokenManager{token: "official_token"}
+
+	svc := NewService(userRepo, nil, officialClient, tokenMgr, 1000)
+
+	resp, err := svc.LoginByOfficial("valid_code")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp.Token != "official_token" {
+		t.Errorf("expected token official_token, got %s", resp.Token)
+	}
+	if resp.OpenID != "official_openid" {
+		t.Errorf("expected openId official_openid, got %s", resp.OpenID)
+	}
+	if resp.WechatNickname != "OfficialUser" {
+		t.Errorf("expected nickname OfficialUser, got %s", resp.WechatNickname)
+	}
+	if resp.WechatAvatar != "http://avatar.png" {
+		t.Errorf("expected avatar http://avatar.png, got %s", resp.WechatAvatar)
+	}
+}
+
+func TestLoginByOfficialExistingUser(t *testing.T) {
+	officialClient := &fakeOfficialWechatClient{
+		tokenResp: &wechat.OAuth2AccessTokenResp{OpenID: "existing_official_openid", AccessToken: "access_token"},
+		userInfo:  &wechat.UserInfoResp{OpenID: "existing_official_openid", Nickname: "Existing", HeadImgURL: "http://old.png"},
+	}
+	userRepo := &fakeUserRepo{
+		getUser: &repo.User{ID: 5, OpenID: "existing_official_openid", Nickname: "Existing", AvatarURL: "http://old.png"},
+	}
+	tokenMgr := &fakeTokenManager{token: "existing_official_token"}
+
+	svc := NewService(userRepo, nil, officialClient, tokenMgr, 1000)
+
+	resp, err := svc.LoginByOfficial("valid_code")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if resp.Token != "existing_official_token" {
+		t.Errorf("expected token existing_official_token, got %s", resp.Token)
+	}
+	if resp.NeedProfile {
+		t.Errorf("expected needProfile false for existing user with profile")
+	}
+}
+
+func TestLoginByOfficialOAuthError(t *testing.T) {
+	officialClient := &fakeOfficialWechatClient{
+		tokenErr: errors.New("oauth api error"),
+	}
+	userRepo := &fakeUserRepo{}
+	tokenMgr := &fakeTokenManager{}
+
+	svc := NewService(userRepo, nil, officialClient, tokenMgr, 1000)
+
+	_, err := svc.LoginByOfficial("bad_code")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestLoginByOfficialUserInfoError(t *testing.T) {
+	officialClient := &fakeOfficialWechatClient{
+		tokenResp: &wechat.OAuth2AccessTokenResp{OpenID: "official_openid", AccessToken: "access_token"},
+		userErr:   errors.New("userinfo api error"),
+	}
+	userRepo := &fakeUserRepo{}
+	tokenMgr := &fakeTokenManager{}
+
+	svc := NewService(userRepo, nil, officialClient, tokenMgr, 1000)
+
+	_, err := svc.LoginByOfficial("valid_code")
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

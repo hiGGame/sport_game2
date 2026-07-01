@@ -22,17 +22,24 @@ type wechatClient interface {
 	Code2Session(code string) (*wechat.Code2SessionResp, error)
 }
 
+type officialWechatClient interface {
+	GetOAuth2AccessToken(code string) (*wechat.OAuth2AccessTokenResp, error)
+	GetUserInfo(accessToken, openID string) (*wechat.UserInfoResp, error)
+}
+
 type Service struct {
 	userRepo       userStore
 	wechat         wechatClient
+	officialWechat officialWechatClient
 	tokenManager   tokenManager
 	initialCredits int
 }
 
-func NewService(userRepo userStore, wechat wechatClient, tokenManager tokenManager, initialCredits int) *Service {
+func NewService(userRepo userStore, wechat wechatClient, official officialWechatClient, tokenManager tokenManager, initialCredits int) *Service {
 	return &Service{
 		userRepo:       userRepo,
 		wechat:         wechat,
+		officialWechat: official,
 		tokenManager:   tokenManager,
 		initialCredits: initialCredits,
 	}
@@ -85,6 +92,48 @@ func (s *Service) Login(req *LoginRequest) (*LoginResponse, error) {
 		WechatNickname: user.Nickname,
 		WechatAvatar:   user.AvatarURL,
 		OpenID:         session.OpenID,
+		NeedProfile:    user.Nickname == "" && user.AvatarURL == "",
+	}, nil
+}
+
+func (s *Service) LoginByOfficial(code string) (*LoginResponse, error) {
+	tokenResp, err := s.officialWechat.GetOAuth2AccessToken(code)
+	if err != nil {
+		return nil, fmt.Errorf("official oauth: %w", err)
+	}
+
+	userInfo, err := s.officialWechat.GetUserInfo(tokenResp.AccessToken, tokenResp.OpenID)
+	if err != nil {
+		return nil, fmt.Errorf("official userinfo: %w", err)
+	}
+
+	user, err := s.userRepo.GetUserByOpenID(tokenResp.OpenID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+
+	if user == nil {
+		user, err = s.userRepo.CreateUser(tokenResp.OpenID, tokenResp.UnionID, s.initialCredits)
+		if err != nil {
+			return nil, fmt.Errorf("create user: %w", err)
+		}
+		if userInfo.Nickname != "" || userInfo.HeadImgURL != "" {
+			_ = s.userRepo.UpdateUserProfile(user.ID, userInfo.Nickname, userInfo.HeadImgURL)
+			user.Nickname = userInfo.Nickname
+			user.AvatarURL = userInfo.HeadImgURL
+		}
+	}
+
+	token, err := s.tokenManager.Generate(user.ID, user.OpenID)
+	if err != nil {
+		return nil, fmt.Errorf("generate token: %w", err)
+	}
+
+	return &LoginResponse{
+		Token:          token,
+		WechatNickname: user.Nickname,
+		WechatAvatar:   user.AvatarURL,
+		OpenID:         tokenResp.OpenID,
 		NeedProfile:    user.Nickname == "" && user.AvatarURL == "",
 	}, nil
 }

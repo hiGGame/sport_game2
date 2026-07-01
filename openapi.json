@@ -594,9 +594,72 @@
         ]
       }
     },
+    "/customer/login/official/redirect": {
+      "get": {
+        "description": "服务号网页授权登录入口（微信内 H5 场景）。\n服务端自动构造微信 OAuth2 授权链接（scope=snsapi_userinfo），\n并通过 302 重定向引导用户进入微信授权页面。\n\n【流程说明】\n1. 前端在微信内 H5 页面中跳转到此接口\n2. 服务端生成随机 state，写入 HttpOnly Cookie（5 分钟有效）\n3. 服务端 302 重定向到微信授权页面\n4. 用户同意授权后，微信回调 /customer/login/official/callback\n\n【前端接入】\n```javascript\nwindow.location.href = '/v1/customer/login/official/redirect';\n```\n\n无需 JWT token。需在配置中设置 wechat.official.appid/secret。\n",
+        "responses": {
+          "302": {
+            "description": "重定向到微信 OAuth2 授权页面",
+            "headers": {
+              "Location": {
+                "description": "微信授权 URL（open.weixin.qq.com/connect/oauth2/authorize）",
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "500": {
+            "description": "服务号未配置（appid/secret 为空）"
+          }
+        },
+        "security": [],
+        "summary": "服务号 OAuth2 授权跳转",
+        "tags": ["GameInterface"]
+      }
+    },
+    "/customer/login/official/callback": {
+      "get": {
+        "description": "微信授权完成后的回调端点。服务端自动完成以下操作：\n1. 校验 state（防 CSRF，与 redirect 端点写入的 Cookie 比对）\n2. 用 code 换取网页 access_token + openid（sns/oauth2/access_token）\n3. 获取用户信息：昵称、头像（sns/userinfo，scope=snsapi_userinfo）\n4. 查找或创建用户（新用户自动写入昵称和头像）\n5. 签发 JWT token\n6. 302 重定向回前端页面，token 通过 URL 参数传递\n\n【前端接入】\n前端无需直接调用此接口。授权完成后微信会自动跳转至此端点，\n服务端处理完毕后会 302 重定向到配置的前端地址（wechat.frontend_url），\n前端页面加载时从 URL 参数读取 token 即可：\n```javascript\nconst token = new URLSearchParams(location.search).get('token');\nif (token) { localStorage.setItem('token', token); }\n```\n\n无需 JWT token。\n",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "微信授权 code（微信自动传入）"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "状态参数（微信自动传入，与 Cookie 比对校验）"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "重定向回前端页面，携带以下 URL 参数：token, openId, wechatNickname, wechatAvatar, needProfile。错误时重定向到 {frontend_url}?error={错误信息}",
+            "headers": {
+              "Location": {
+                "description": "{frontend_url}?token={JWT}&openId={openid}&wechatNickname={nick}&wechatAvatar={avatar}&needProfile={bool}",
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "400": {
+            "description": "参数缺失（code/state 为空）或 state 校验失败，重定向到前端并带 error 参数"
+          },
+          "500": {
+            "description": "微信 API 调用失败，重定向到前端并带 error 参数"
+          }
+        },
+        "security": [],
+        "summary": "服务号 OAuth2 授权回调",
+        "tags": ["GameInterface"]
+      }
+    },
     "/lottery/bet/create": {
       "post": {
-        "description": "用户对一场赛事提交竞猜预测，从积分中扣减相应点数。\n\n【默认值】\n- lotteryType 默认为 \"227\"（竞彩足球）\n- subType 默认为 \"6\"（胜平负）\n- Points 不传或 ≤0 时默认为 2 根骨头\n\n【业务规则】\n- 扣减指定积分，不足返回 402\n- 赛事停售或距截止时间不足（60 分钟）返回 403\n- 成功返回预测 ID 和扣减后积分余额\n\n需携带 JWT token。\n",
+        "description": "用户对一场赛事提交竞猜预测（不消耗骨头）。\n\n【默认值】\n- lotteryType 默认为 \"227\"（竞彩足球）\n- subType 默认为 \"6\"（胜平负）\n- Points 不传或 ≤0 时默认为 2 根骨头（仅记录,不扣减）\n\n【业务规则】\n- 创建竞猜不消耗骨头,不扣减积分\n- 赛事停售或距截止时间不足（60 分钟）返回 403\n- 成功返回预测 ID\n\n需携带 JWT token。\n",
         "requestBody": {
           "content": {
             "application/json": {
@@ -611,7 +674,7 @@
                     "type": "string"
                   },
                   "points": {
-                    "description": "投注骨头数。不传默认 2",
+                    "description": "投注骨头数。不传默认 2（仅记录,不扣减）",
                     "type": "integer"
                   }
                 },
@@ -632,7 +695,7 @@
                 "schema": {
                   "properties": {
                     "balanceAfter": {
-                      "description": "扣减后积分余额",
+                      "description": "保留字段,固定返回 0（不再扣减积分）",
                       "type": "integer"
                     },
                     "predictionId": {
@@ -652,9 +715,6 @@
           },
           "401": {
             "description": "未登录或 token 无效"
-          },
-          "402": {
-            "description": "积分（骨头）不足"
           },
           "403": {
             "description": "赛事已停售或已锁定"

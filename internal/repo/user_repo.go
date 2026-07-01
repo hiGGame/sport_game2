@@ -111,6 +111,14 @@ func (db *DB) GetUserByID(id int64) (*User, error) {
 	return &u, nil
 }
 
+func (db *DB) IncrementTotalBets(userID int64) error {
+	_, err := db.Exec("UPDATE users SET total_bets = total_bets + 1 WHERE id = $1", userID)
+	if err != nil {
+		return fmt.Errorf("increment total bets: %w", err)
+	}
+	return nil
+}
+
 func (db *DB) UpdateUserProfile(id int64, nickname, avatarURL string) error {
 	_, err := db.Exec("UPDATE users SET nickname = $1, avatar_url = $2 WHERE id = $3", nickname, avatarURL, id)
 	return err
@@ -497,9 +505,11 @@ func (db *DB) GetSettledAIPreds() ([]Prediction, error) {
 	return list, nil
 }
 
-func (db *DB) GetSettledByOpenID(openID, date string) ([]Prediction, error) {
-	rows, err := db.Query(`SELECT id, user_id, match_id, lottery_type, match_code, sub_type, bet_code, handicap, points, status, is_correct
-		FROM predictions WHERE user_id = (SELECT id FROM users WHERE open_id = $1) AND (settled_at AT TIME ZONE 'Asia/Shanghai')::date = $2 AND status IN ('won','lost') AND is_correct IS NOT NULL`, openID, date)
+func (db *DB) GetSettledByOpenID(openID, fromTime, toTime string) ([]Prediction, error) {
+	rows, err := db.Query(`SELECT p.id, p.user_id, p.match_id, p.lottery_type, p.match_code, p.sub_type, p.bet_code, p.handicap, p.points, p.status, p.is_correct
+		FROM predictions p
+		JOIN matches m ON p.match_id = m.match_id AND p.lottery_type = m.lottery_type
+		WHERE p.user_id = (SELECT id FROM users WHERE open_id = $1) AND m.match_time_str >= $2 AND m.match_time_str < $3 AND p.status IN ('won','lost') AND p.is_correct IS NOT NULL`, openID, fromTime, toTime)
 	if err != nil {
 		return nil, fmt.Errorf("get settled predictions by openID: %w", err)
 	}
@@ -518,9 +528,11 @@ func (db *DB) GetSettledByOpenID(openID, date string) ([]Prediction, error) {
 	return list, nil
 }
 
-func (db *DB) GetSettledByUserID(userID int64, date string) ([]Prediction, error) {
-	rows, err := db.Query(`SELECT id, user_id, match_id, lottery_type, match_code, sub_type, bet_code, handicap, points, status, is_correct
-		FROM predictions WHERE user_id = $1 AND (settled_at AT TIME ZONE 'Asia/Shanghai')::date = $2 AND status IN ('won','lost') AND is_correct IS NOT NULL`, userID, date)
+func (db *DB) GetSettledByUserID(userID int64, fromTime, toTime string) ([]Prediction, error) {
+	rows, err := db.Query(`SELECT p.id, p.user_id, p.match_id, p.lottery_type, p.match_code, p.sub_type, p.bet_code, p.handicap, p.points, p.status, p.is_correct
+		FROM predictions p
+		JOIN matches m ON p.match_id = m.match_id AND p.lottery_type = m.lottery_type
+		WHERE p.user_id = $1 AND m.match_time_str >= $2 AND m.match_time_str < $3 AND p.status IN ('won','lost') AND p.is_correct IS NOT NULL`, userID, fromTime, toTime)
 	if err != nil {
 		return nil, fmt.Errorf("get settled predictions by userID: %w", err)
 	}

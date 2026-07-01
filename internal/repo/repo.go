@@ -103,17 +103,26 @@ func (db *DB) UpsertMatchResult(r apifox.DrawInfoReply) error {
 		}
 	}
 
+	// sporttery results API 只返回日期不返回时间, 从 matches 表获取完整的 match_time_str。
+	matchTimeStr := r.MatchTimeStr
+	var dbMatchTime string
+	err := db.QueryRow(`SELECT match_time_str FROM matches WHERE match_id = $1 AND lottery_type = '227'`, r.MatchID).Scan(&dbMatchTime)
+	if err == nil && dbMatchTime != "" {
+		matchTimeStr = dbMatchTime
+	}
+
 	gameDraw, _ := json.Marshal(r.GameDrawList)
 	rawData, _ := json.Marshal(r)
 	normalTimeScore := joinScore(r.HomeTeamScore.NormalTimeScore, r.AwayTeamScore.NormalTimeScore)
 	halfTimeScore := joinScore(r.HomeTeamScore.HalfTimeScore, r.AwayTeamScore.HalfTimeScore)
-	_, err := db.Exec(`
+	_, err = db.Exec(`
 		INSERT INTO match_results (match_id, match_code, issue, match_time_str, week_day,
 			home_team_name, away_team_name, league_name,
 			home_score, away_score, normal_time_score, half_time_score,
 			is_valid, game_draw_list, raw_data, updated_at)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
 		ON CONFLICT (match_id) DO UPDATE SET
+			match_time_str = EXCLUDED.match_time_str,
 			home_score = EXCLUDED.home_score,
 			away_score = EXCLUDED.away_score,
 			normal_time_score = EXCLUDED.normal_time_score,
@@ -123,7 +132,7 @@ func (db *DB) UpsertMatchResult(r apifox.DrawInfoReply) error {
 			raw_data = EXCLUDED.raw_data,
 			updated_at = NOW()
 	`,
-		r.MatchID, r.MatchCode, "", r.MatchTimeStr, r.WeekDay,
+		r.MatchID, r.MatchCode, "", matchTimeStr, r.WeekDay,
 		r.HomeTeamInfo.CnName, r.AwayTeamInfo.CnName, r.TournamentInfo.CnName,
 		r.HomeTeamScore.Score, r.AwayTeamScore.Score,
 		normalTimeScore, halfTimeScore,
@@ -145,14 +154,15 @@ func (db *DB) getMatchHandicap(matchID string) float64 {
 }
 
 func (db *DB) GetMatchBetList(lotteryType, subType string) ([]apifox.MatchBetInfo, error) {
+	nowStr := time.Now().In(shanghaiLoc).Format("2006-01-02 15:04:05")
 	query := `SELECT match_id, sport_id, lottery_type, match_code, issue, match_time_str, bet_end_time_str,
 		league_id, league_name, league_alias, league_color, league_level, league_logo,
 		home_team_name, home_team_alias, home_team_logo, home_team_rank,
 		away_team_name, away_team_alias, away_team_logo, away_team_rank,
 		bet_infos, is_stop_sell, status
-		FROM matches WHERE match_time_str::TIMESTAMPTZ > NOW()`
-	args := []interface{}{}
-	argIdx := 1
+		FROM matches WHERE match_time_str > $1`
+	args := []interface{}{nowStr}
+	argIdx := 2
 
 	if lotteryType != "" {
 		query += fmt.Sprintf(" AND lottery_type = $%d", argIdx)

@@ -31,13 +31,14 @@ type betStore interface {
 	GetAIPrediction(matchID string) ([]repo.AIPrediction, error)
 	GetExpertPredictions(matchID string) ([]repo.ExpertPrediction, error)
 	CheckDuplicatePrediction(userID int64, matchID, lotteryType, subType string) (bool, error)
-	GetSettledByOpenID(openID, date string) ([]repo.Prediction, error)
-	GetSettledByUserID(userID int64, date string) ([]repo.Prediction, error)
+	GetSettledByOpenID(openID, fromTime, toTime string) ([]repo.Prediction, error)
+	GetSettledByUserID(userID int64, fromTime, toTime string) ([]repo.Prediction, error)
 }
 
 type creditsManager interface {
 	Deduct(userID int64, amount int, reason string, refID int64) (int, error)
 	Add(userID int64, amount int, reason string) (int, error)
+	IncrementTotalBets(userID int64) error
 }
 
 const (
@@ -46,8 +47,10 @@ const (
 	defaultPoints      = 2
 	shareBonus         = 2
 
-	// PKTimezone 是每日 PK "昨天" 判定使用的固定时区 (Asia/Shanghai)。
-	// Go 端用此 loc 计算 yesterday;SQL 端也必须用 AT TIME ZONE 'Asia/Shanghai' 切日,两端才能对齐。
+	// PKTimezone 是竞猜时间判定使用的固定时区 (Asia/Shanghai)。
+	// 竞彩周期以每日 11:00 为分界线 (前日 11:00 ~ 当日 11:00),
+	// Go 端用此时区计算昨天竞彩周期的起止时间,传给 SQL 做字符串范围比较,
+	// 与 GetDrawList 的 11:00 周期逻辑保持一致。
 	PKTimezone = "Asia/Shanghai"
 
 	// 机器人用户在 users.open_id 中的业务标识。由 ensureRobotUser 保底创建,
@@ -117,14 +120,16 @@ func (s *Service) CreateBet(userID int64, req *CreateBetRequest) (*CreateBetResp
 	}
 
 	if match.MatchInfo.MatchTimeStr != "" {
-		matchTime, err := time.ParseInLocation("2006-01-02 15:04:05", match.MatchInfo.MatchTimeStr, time.Local)
+		loc, _ := time.LoadLocation(PKTimezone)
+		matchTime, err := time.ParseInLocation("2006-01-02 15:04:05", match.MatchInfo.MatchTimeStr, loc)
 		if err == nil && time.Now().After(matchTime) {
 			return nil, ErrMatchStarted
 		}
 	}
 
 	if s.lockMinutesBefore > 0 && match.LotteryInfo.BetEndTimeStr != "" {
-		betEndTime, err := time.ParseInLocation("2006-01-02 15:04:05", match.LotteryInfo.BetEndTimeStr, time.Local)
+		loc, _ := time.LoadLocation(PKTimezone)
+		betEndTime, err := time.ParseInLocation("2006-01-02 15:04:05", match.LotteryInfo.BetEndTimeStr, loc)
 		if err == nil {
 			lockTime := betEndTime.Add(-time.Duration(s.lockMinutesBefore) * time.Minute)
 			if time.Now().After(lockTime) {
@@ -165,25 +170,20 @@ func (s *Service) CreateBet(userID int64, req *CreateBetRequest) (*CreateBetResp
 		Points:      points,
 	}
 
-	// Deduct credits first — if this fails, nothing is persisted.
-	balance, err := s.creditManager.Deduct(userID, points, "bet", 0)
-	if err != nil {
-		return nil, fmt.Errorf("deduct credits: %w", err)
+	// Increment total bets counter (no credits deduction — betting is free).
+	if err := s.creditManager.IncrementTotalBets(userID); err != nil {
+		return nil, fmt.Errorf("increment total bets: %w", err)
 	}
 
-	// Create prediction after deduction succeeds.
+	// Create prediction.
 	predID, err := s.betRepo.CreatePrediction(pred)
 	if err != nil {
-		// Refund credits since prediction creation failed.
-		if _, refundErr := s.creditManager.Add(userID, points, "refund_create_failed"); refundErr != nil {
-			return nil, fmt.Errorf("create prediction failed and refund also failed: %w", refundErr)
-		}
 		return nil, fmt.Errorf("create prediction: %w", err)
 	}
 
 	return &CreateBetResponse{
 		PredictionID: predID,
-		BalanceAfter: balance,
+		BalanceAfter: 0,
 	}, nil
 }
 
@@ -323,9 +323,20 @@ func (s *Service) GetDailyPK(userID int64) (*DailyPKResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load pk timezone %s: %w", PKTimezone, err)
 	}
-	yesterday := time.Now().In(loc).AddDate(0, 0, -1).Format("2006-01-02")
 
-	userPreds, err := s.betRepo.GetSettledByUserID(userID, yesterday)
+	// 竞彩周期以每日 11:00 为分界线 (前日 11:00 ~ 当日 11:00)。
+	// PK "昨天"指: 用户调用时的上一个完整竞彩周期。
+	// 如果当前时间 >= 11:00: 昨天周期 = 昨天 11:00 ~ 今天 11:00
+	// 如果当前时间 <  11:00: 昨天周期 = 前天 11:00 ~ 昨天 11:00
+	now := time.Now().In(loc)
+	pkDate := now.AddDate(0, 0, -1)
+	if now.Hour() < 11 {
+		pkDate = now.AddDate(0, 0, -2)
+	}
+	fromTime := pkDate.Format("2006-01-02") + " 11:00:00"
+	toTime := pkDate.AddDate(0, 0, 1).Format("2006-01-02") + " 11:00:00"
+
+	userPreds, err := s.betRepo.GetSettledByUserID(userID, fromTime, toTime)
 	if err != nil {
 		return nil, fmt.Errorf("get user settled predictions: %w", err)
 	}
@@ -334,11 +345,11 @@ func (s *Service) GetDailyPK(userID int64) (*DailyPKResponse, error) {
 		return nil, nil
 	}
 
-	expertPreds, err := s.betRepo.GetSettledByOpenID(robotExpertOpenID, yesterday)
+	expertPreds, err := s.betRepo.GetSettledByOpenID(robotExpertOpenID, fromTime, toTime)
 	if err != nil {
 		return nil, fmt.Errorf("get expert settled predictions: %w", err)
 	}
-	aiPreds, err := s.betRepo.GetSettledByOpenID(robotAIOpenID, yesterday)
+	aiPreds, err := s.betRepo.GetSettledByOpenID(robotAIOpenID, fromTime, toTime)
 	if err != nil {
 		return nil, fmt.Errorf("get ai settled predictions: %w", err)
 	}

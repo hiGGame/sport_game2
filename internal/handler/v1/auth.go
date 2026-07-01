@@ -1,6 +1,12 @@
 package v1
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"net/url"
+
 	"github.com/gin-gonic/gin"
 
 	"sport_game2/internal/errs"
@@ -9,11 +15,13 @@ import (
 )
 
 type AuthHandler struct {
-	svc *auth.Service
+	svc           *auth.Service
+	officialAppID string
+	frontendURL   string
 }
 
-func NewAuthHandler(svc *auth.Service) *AuthHandler {
-	return &AuthHandler{svc: svc}
+func NewAuthHandler(svc *auth.Service, officialAppID, frontendURL string) *AuthHandler {
+	return &AuthHandler{svc: svc, officialAppID: officialAppID, frontendURL: frontendURL}
 }
 
 func (h *AuthHandler) LoginByWechat(c *gin.Context) {
@@ -88,4 +96,88 @@ func (h *AuthHandler) DevLogin(c *gin.Context) {
 	}
 
 	c.JSON(200, resp)
+}
+
+func (h *AuthHandler) OfficialLoginRedirect(c *gin.Context) {
+	frontendURL := c.Query("redirect_uri")
+	if frontendURL == "" {
+		frontendURL = h.frontendURL
+	}
+	if _, err := url.Parse(frontendURL); err != nil {
+		frontendURL = h.frontendURL
+	}
+
+	state := generateRandomState()
+	c.SetCookie("oauth_state", state, 300, "/", "", false, true)
+	c.SetCookie("oauth_redirect_uri", frontendURL, 300, "/", "", false, true)
+
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+	callbackURL := fmt.Sprintf("%s://%s/v1/customer/login/official/callback", scheme, c.Request.Host)
+
+	oauthURL := fmt.Sprintf(
+		"https://open.weixin.qq.com/connect/oauth2/authorize?appid=%s&redirect_uri=%s&response_type=code&scope=snsapi_userinfo&state=%s#wechat_redirect",
+		h.officialAppID,
+		url.QueryEscape(callbackURL),
+		state,
+	)
+	c.Redirect(http.StatusFound, oauthURL)
+}
+
+func (h *AuthHandler) OfficialLoginCallback(c *gin.Context) {
+	code := c.Query("code")
+	state := c.Query("state")
+	if code == "" || state == "" {
+		redirectWithError(c, h.resolveFrontendURL(c), "missing code or state")
+		return
+	}
+
+	cookieState, err := c.Cookie("oauth_state")
+	if err != nil || cookieState != state {
+		redirectWithError(c, h.resolveFrontendURL(c), "invalid state")
+		return
+	}
+	c.SetCookie("oauth_state", "", -1, "/", "", false, true)
+
+	frontendURL := h.resolveFrontendURL(c)
+	c.SetCookie("oauth_redirect_uri", "", -1, "/", "", false, true)
+
+	resp, err := h.svc.LoginByOfficial(code)
+	if err != nil {
+		redirectWithError(c, frontendURL, "login failed")
+		return
+	}
+
+	params := url.Values{}
+	params.Set("token", resp.Token)
+	params.Set("openId", resp.OpenID)
+	params.Set("wechatNickname", resp.WechatNickname)
+	params.Set("wechatAvatar", resp.WechatAvatar)
+	params.Set("needProfile", fmt.Sprintf("%t", resp.NeedProfile))
+
+	redirectURL := fmt.Sprintf("%s?%s", frontendURL, params.Encode())
+	c.Redirect(http.StatusFound, redirectURL)
+}
+
+func (h *AuthHandler) resolveFrontendURL(c *gin.Context) string {
+	if u, err := c.Cookie("oauth_redirect_uri"); err == nil && u != "" {
+		return u
+	}
+	return h.frontendURL
+}
+
+func redirectWithError(c *gin.Context, frontendURL, message string) {
+	redirectURL := fmt.Sprintf("%s?error=%s", frontendURL, url.QueryEscape(message))
+	c.Redirect(http.StatusFound, redirectURL)
+}
+
+func generateRandomState() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }

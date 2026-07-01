@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -35,10 +36,10 @@ func (c *Client) Code2Session(code string) (*Code2SessionResp, error) {
 		return nil, fmt.Errorf("wechat appid or secret not configured")
 	}
 
-	url := fmt.Sprintf("https://api.weixin.qq.com/sns/jscode2session?appid=%s&secret=%s&js_code=%s&grant_type=authorization_code",
-		c.appID, c.secret, code)
+	u := fmt.Sprintf("https://api.weixin.qq.com/sns/jscode2session?appid=%s&secret=%s&js_code=%s&grant_type=authorization_code",
+		url.QueryEscape(c.appID), url.QueryEscape(c.secret), url.QueryEscape(code))
 
-	resp, err := c.httpClient.Get(url)
+	resp, err := c.httpClient.Get(u)
 	if err != nil {
 		return nil, fmt.Errorf("wechat code2session: %w", err)
 	}
