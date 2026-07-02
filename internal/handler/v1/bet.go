@@ -2,6 +2,7 @@ package v1
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -31,19 +32,19 @@ func (h *BetHandler) CreateBet(c *gin.Context) {
 	if err != nil {
 		switch {
 		case errors.Is(err, bet.ErrBetLocked):
-			middleware.AbortWithError(c, errs.New(errs.CodeMatchLocked, err.Error(), 500))
+			middleware.AbortWithError(c, errs.New(errs.CodeMatchLocked, err.Error(), http.StatusForbidden))
 		case errors.Is(err, bet.ErrMatchStopped):
-			middleware.AbortWithError(c, errs.New(errs.CodeMatchStopped, err.Error(), 500))
+			middleware.AbortWithError(c, errs.New(errs.CodeMatchStopped, err.Error(), http.StatusForbidden))
 		case errors.Is(err, bet.ErrMatchStarted):
-			middleware.AbortWithError(c, errs.New(errs.CodeMatchStarted, err.Error(), 500))
+			middleware.AbortWithError(c, errs.New(errs.CodeMatchStarted, err.Error(), http.StatusForbidden))
 		case errors.Is(err, bet.ErrMatchFinished):
-			middleware.AbortWithError(c, errs.New(errs.CodeMatchFinished, err.Error(), 500))
+			middleware.AbortWithError(c, errs.New(errs.CodeMatchFinished, err.Error(), http.StatusForbidden))
 		case errors.Is(err, bet.ErrMatchNotFound):
-			middleware.AbortWithError(c, errs.New(errs.CodeNotFound, err.Error(), 500))
+			middleware.AbortWithError(c, errs.New(errs.CodeNotFound, err.Error(), http.StatusNotFound))
 		case errors.Is(err, bet.ErrInvalidSelection):
-			middleware.AbortWithError(c, errs.New(errs.CodeValidation, err.Error(), 500))
+			middleware.AbortWithError(c, errs.New(errs.CodeValidation, err.Error(), http.StatusBadRequest))
 		case errors.Is(err, bet.ErrDuplicateBet):
-			middleware.AbortWithError(c, errs.New(errs.CodeDuplicateBet, err.Error(), 500))
+			middleware.AbortWithError(c, errs.New(errs.CodeDuplicateBet, err.Error(), http.StatusConflict))
 		default:
 			middleware.AbortWithError(c, err)
 		}

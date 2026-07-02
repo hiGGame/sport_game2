@@ -398,7 +398,9 @@
 
         async function fetchLeaderboard() {
             try {
-                const resp = await fetch(API_BASE + '/lottery/leaderboard');
+                const opts = {};
+                if (testToken) opts.headers = { 'Authorization': 'Bearer ' + testToken };
+                const resp = await fetch(API_BASE + '/lottery/leaderboard', opts);
                 const data = await resp.json();
                 renderLeaderboard(data.list || []);
             } catch(e) { document.getElementById('lbContent').innerHTML = '加载失败'; }
@@ -408,7 +410,7 @@
             if (!list.length) { document.getElementById('lbContent').innerHTML = '暂无数据'; return; }
             const roleMap = { expert: '大拿', ai: 'AI狗', user: '用户' };
             const barColors = { expert: '#e74c3c', ai: '#3498db', user: '#27ae60' };
-            let html = `<table class="lb-table"><tr><th></th><th>名称</th><th>准确率</th><th>猜中</th><th>最佳连击</th></tr>`;
+            let html = `<table class="lb-table"><tr><th></th><th>名称</th><th>准确率</th><th>猜中</th><th>总预测</th><th>最佳连击</th></tr>`;
             for (const e of list) {
                 const acc = e.wins > 0 ? (e.accuracy || 0).toFixed(1) : '0.0';
                 const avatarHtml = e.avatar
@@ -419,6 +421,7 @@
                     <td><span class="role-${e.role}">${e.name}</span></td>
                     <td><span class="acc-bar" style="background:${barColors[e.role]};width:${Math.max(parseFloat(acc)*0.8,4)}px"></span>${acc}%</td>
                     <td>${e.wins}</td>
+                    <td>${e.total || 0}</td>
                     <td>${e.bestStreak > 0 ? `<span class="streak">🔥 ${e.bestStreak}连击</span>` : '-'}</td>
                 </tr>`;
             }

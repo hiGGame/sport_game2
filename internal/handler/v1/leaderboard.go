@@ -1,8 +1,11 @@
 package v1
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
+	"sport_game2/internal/middleware"
 	"sport_game2/internal/service/leaderboard"
 )
 
@@ -15,14 +18,16 @@ func NewLeaderboardHandler(svc *leaderboard.Service) *LeaderboardHandler {
 }
 
 func (h *LeaderboardHandler) GetLeaderboard(c *gin.Context) {
-	entries, err := h.svc.GetLeaderboard()
+	userID := c.GetInt64("userId")
+
+	entries, err := h.svc.GetLeaderboard(userID)
 	if err != nil {
-		c.JSON(500, gin.H{"code": 50000, "message": err.Error()})
+		middleware.AbortWithError(c, err)
 		return
 	}
-	c.JSON(200, gin.H{"list": entries})
+	c.JSON(http.StatusOK, gin.H{"list": entries})
 }
 
 func (h *LeaderboardHandler) GetAvatars(c *gin.Context) {
-	c.JSON(200, AvatarCacheInstance.Get())
+	c.JSON(http.StatusOK, AvatarCacheInstance.Get())
 }

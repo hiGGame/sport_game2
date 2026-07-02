@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"sport_game2/internal/adapter/apifox"
@@ -72,14 +73,20 @@ type Service struct {
 	betRepo           betStore
 	creditManager     creditsManager
 	lockMinutesBefore int
+	pkLocation        *time.Location
 }
 
 func NewService(matchRepo matchStore, betRepo betStore, cm creditsManager, lockMinutesBefore int) *Service {
+	loc, err := time.LoadLocation(PKTimezone)
+	if err != nil {
+		loc = time.FixedZone("CST", 8*3600)
+	}
 	return &Service{
 		matchRepo:         matchRepo,
 		betRepo:           betRepo,
 		creditManager:     cm,
 		lockMinutesBefore: lockMinutesBefore,
+		pkLocation:        loc,
 	}
 }
 
@@ -119,18 +126,23 @@ func (s *Service) CreateBet(userID int64, req *CreateBetRequest) (*CreateBetResp
 		return nil, ErrMatchStopped
 	}
 
-	if match.MatchInfo.MatchTimeStr != "" {
-		loc, _ := time.LoadLocation(PKTimezone)
-		matchTime, err := time.ParseInLocation("2006-01-02 15:04:05", match.MatchInfo.MatchTimeStr, loc)
-		if err == nil && time.Now().After(matchTime) {
+	if ts := strings.TrimSpace(match.MatchInfo.MatchTimeStr); ts != "" {
+		matchTime, err := time.ParseInLocation("2006-01-02 15:04:05", ts, s.pkLocation)
+		if err != nil {
+			return nil, fmt.Errorf("parse match time %q: %w", match.MatchInfo.MatchTimeStr, err)
+		}
+		if time.Now().After(matchTime) {
 			return nil, ErrMatchStarted
 		}
 	}
 
-	if s.lockMinutesBefore > 0 && match.LotteryInfo.BetEndTimeStr != "" {
-		loc, _ := time.LoadLocation(PKTimezone)
-		betEndTime, err := time.ParseInLocation("2006-01-02 15:04:05", match.LotteryInfo.BetEndTimeStr, loc)
-		if err == nil {
+	if s.lockMinutesBefore > 0 {
+		betEndStr := strings.TrimSpace(match.LotteryInfo.BetEndTimeStr)
+		if betEndStr != "" {
+			betEndTime, err := time.ParseInLocation("2006-01-02 15:04:05", betEndStr, s.pkLocation)
+			if err != nil {
+				return nil, fmt.Errorf("parse bet end time %q: %w", match.LotteryInfo.BetEndTimeStr, err)
+			}
 			lockTime := betEndTime.Add(-time.Duration(s.lockMinutesBefore) * time.Minute)
 			if time.Now().After(lockTime) {
 				return nil, ErrBetLocked
@@ -170,15 +182,15 @@ func (s *Service) CreateBet(userID int64, req *CreateBetRequest) (*CreateBetResp
 		Points:      points,
 	}
 
-	// Increment total bets counter (no credits deduction — betting is free).
-	if err := s.creditManager.IncrementTotalBets(userID); err != nil {
-		return nil, fmt.Errorf("increment total bets: %w", err)
-	}
-
-	// Create prediction.
+	// Create prediction first; only increment total_bets on success to avoid
+	// leaving a phantom count when the insert fails.
 	predID, err := s.betRepo.CreatePrediction(pred)
 	if err != nil {
 		return nil, fmt.Errorf("create prediction: %w", err)
+	}
+
+	if err := s.creditManager.IncrementTotalBets(userID); err != nil {
+		return nil, fmt.Errorf("increment total bets: %w", err)
 	}
 
 	return &CreateBetResponse{

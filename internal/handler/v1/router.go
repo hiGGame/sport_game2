@@ -34,7 +34,6 @@ func (r *Router) Register(rg *gin.RouterGroup) {
 	rg.GET("/lottery/match/bet-info", r.matchHandler.GetMatchBetInfo)
 	rg.GET("/lottery/match/draw/list", r.resultHandler.GetDrawHomeList)
 	rg.GET("/matches/:matchId/predict", r.resultHandler.GetMatchPrediction)
-	rg.GET("/lottery/leaderboard", r.leaderboardHandler.GetLeaderboard)
 	rg.GET("/lottery/avatars", r.leaderboardHandler.GetAvatars)
 	rg.GET("/system/spider-status", r.matchHandler.GetSpiderStatus)
 
@@ -50,6 +49,7 @@ func (r *Router) Register(rg *gin.RouterGroup) {
 	{
 		authed.GET("/user/info", r.authHandler.GetUserInfo)
 		authed.PUT("/user/info", r.authHandler.UpdateUserInfo)
+		authed.GET("/lottery/leaderboard", r.leaderboardHandler.GetLeaderboard)
 		authed.POST("/lottery/bet/create", r.betHandler.CreateBet)
 		authed.GET("/lottery/bet/mine", r.betHandler.GetUserPredictions)
 		authed.POST("/lottery/bet/share", r.betHandler.ShareSuccess)

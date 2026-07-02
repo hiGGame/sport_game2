@@ -403,8 +403,8 @@ paths:
     get:
       tags: ["GameInterface"]
       summary: "预测排行榜"
-      description: "返回 AI狗、资深大拿、用户三方的预测准确率排行榜。无需 JWT token。"
-      security: []
+      description: "返回 大拿(老委鬼)、AI狗、当前用户 三方的预测准确率排行榜。需携带 JWT token。"
+      security: [{ "BearerAuth": [] }]
       responses:
         "200":
           description: "成功"
@@ -420,10 +420,13 @@ paths:
                       properties:
                         name: { type: "string", description: "角色名称" }
                         role: { type: "string", description: "角色类型：ai/expert/user" }
+                        avatar: { type: "string", description: "头像URL" }
                         accuracy: { type: "number", description: "准确率(%)" }
                         wins: { type: "integer", description: "猜中次数" }
                         total: { type: "integer", description: "总预测次数" }
                         bestStreak: { type: "integer", description: "最长连中" }
+        "401":
+          description: "未登录或 token 无效"
 
   # ==========================================================================
   #  竞猜

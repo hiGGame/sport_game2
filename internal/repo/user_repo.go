@@ -146,7 +146,7 @@ func (db *DB) CreatePrediction(p *Prediction) (int64, error) {
 
 func (db *DB) CheckDuplicatePrediction(userID int64, matchID, lotteryType, subType string) (bool, error) {
 	var count int
-	err := db.QueryRow(`SELECT COUNT(*) FROM predictions WHERE user_id = $1 AND match_id = $2 AND lottery_type = $3 AND sub_type = $4 AND status = 'pending'`,
+	err := db.QueryRow(`SELECT COUNT(*) FROM predictions WHERE user_id = $1 AND match_id = $2 AND lottery_type = $3 AND sub_type = $4`,
 		userID, matchID, lotteryType, subType).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("check duplicate: %w", err)
@@ -467,7 +467,7 @@ func (db *DB) GetSettledExpertPreds(expertID int64) ([]ExpertPrediction, error) 
 func (db *DB) GetAIPredStats() (total, correct int, err error) {
 	err = db.QueryRow(`SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN ap.bet_code = gd.betCode THEN 1 ELSE 0 END), 0) AS correct
 		FROM ai_predictions ap
-		JOIN match_results mr ON ap.match_id = mr.match_id AND mr.is_valid = true,
+		JOIN match_results mr ON ap.match_id = mr.match_id AND mr.is_valid = true AND jsonb_typeof(mr.game_draw_list) = 'array',
 		LATERAL (SELECT (jsonb_array_elements(mr.game_draw_list)->>'betCode') AS betCode, (jsonb_array_elements(mr.game_draw_list)->>'subType') AS subType) gd
 		WHERE gd.subType = ap.sub_type`).Scan(&total, &correct)
 	if err != nil {
@@ -477,12 +477,12 @@ func (db *DB) GetAIPredStats() (total, correct int, err error) {
 }
 
 func (db *DB) GetSettledAIPreds() ([]Prediction, error) {
-	rows, err := db.Query(`SELECT ap.match_id, ap.lottery_type, ap.sub_type, ap.betCode, ap.confidence,
-		COALESCE(gd.betCode = ap.betCode, false) AS is_correct
+	rows, err := db.Query(`SELECT ap.match_id, ap.lottery_type, ap.sub_type, ap.bet_code, ap.confidence,
+		COALESCE(gd.betCode = ap.bet_code, false) AS is_correct
 		FROM ai_predictions ap
 		LEFT JOIN match_results mr ON ap.match_id = mr.match_id AND mr.is_valid = true,
 		LATERAL (SELECT (jsonb_array_elements(mr.game_draw_list)->>'betCode') AS betCode, (jsonb_array_elements(mr.game_draw_list)->>'subType') AS subType) gd
-		WHERE gd.subType = ap.sub_type
+		WHERE jsonb_typeof(mr.game_draw_list) = 'array' AND gd.subType = ap.sub_type
 		ORDER BY mr.match_time_str ASC, ap.match_id`)
 	if err != nil {
 		return nil, fmt.Errorf("get settled ai predictions: %w", err)
