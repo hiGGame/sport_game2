@@ -2,6 +2,7 @@ package v1
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -83,17 +84,22 @@ func (h *BetHandler) DailyPK(c *gin.Context) {
 
 	resp, err := h.svc.GetPK(userID)
 	if err != nil {
+		log.Printf("[PK] user=%d ERROR: %v", userID, err)
 		middleware.AbortWithError(c, err)
 		return
 	}
 	if resp == nil {
+		log.Printf("[PK] user=%d NO_BETS", userID)
 		c.JSON(200, gin.H{"settled": false, "message": "该周期没有竞猜记录"})
 		return
 	}
 	if resp.Winner == "" {
+		log.Printf("[PK] user=%d WAITING", userID)
 		c.JSON(200, gin.H{"settled": false, "message": "等待开奖结果"})
 		return
 	}
 
+	log.Printf("[PK] user=%d READY winner=%s user=%d/%d expert=%d/%d ai=%d/%d",
+		userID, resp.Winner, resp.UserWins, resp.UserTotal, resp.ExpertWins, resp.ExpertTotal, resp.AIWins, resp.AITotal)
 	c.JSON(200, resp)
 }

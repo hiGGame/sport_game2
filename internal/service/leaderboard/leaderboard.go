@@ -10,8 +10,6 @@ type store interface {
 	GetUserByOpenID(openID string) (*repo.User, error)
 	GetUserByID(id int64) (*repo.User, error)
 	GetSettledUserPreds(userID int64) ([]repo.Prediction, error)
-	GetAIPredStats() (total, correct int, err error)
-	GetSettledAIPreds() ([]repo.Prediction, error)
 }
 
 type Service struct {
@@ -36,6 +34,10 @@ const (
 	robotExpertOpenID = "robot_expert"
 	expertDisplayName = "老委鬼"
 	expertAvatar      = "/web/avatar/expert/weiguitx.jpg"
+
+	robotAIOpenID = "robot_ai"
+	aiDisplayName = "AI狗"
+	aiAvatar      = "/static/avatars/aiDog/dogtx.png"
 )
 
 func (s *Service) GetLeaderboard(userID int64) ([]LeaderboardEntry, error) {
@@ -54,28 +56,18 @@ func (s *Service) GetLeaderboard(userID int64) ([]LeaderboardEntry, error) {
 		entries = append(entries, ep)
 	}
 
-	// AI 狗
-	totalA, correctA, err := s.repo.GetAIPredStats()
+	// AI 狗 — backed by robot_ai user predictions.
+	aiUser, err := s.repo.GetUserByOpenID(robotAIOpenID)
 	if err != nil {
-		return nil, fmt.Errorf("get ai pred stats: %w", err)
+		return nil, fmt.Errorf("get ai user: %w", err)
 	}
-	aiPreds, err := s.repo.GetSettledAIPreds()
-	if err != nil {
-		return nil, fmt.Errorf("get settled ai preds: %w", err)
+	if aiUser != nil {
+		ap, err := s.buildUserEntry(aiUser.ID, aiDisplayName, "ai", aiAvatar)
+		if err != nil {
+			return nil, fmt.Errorf("build ai entry: %w", err)
+		}
+		entries = append(entries, ap)
 	}
-	aiAccuracy := 0.0
-	if totalA > 0 {
-		aiAccuracy = float64(correctA) / float64(totalA) * 100
-	}
-	entries = append(entries, LeaderboardEntry{
-		Name:       "AI狗",
-		Role:       "ai",
-		Avatar:     "/static/avatars/aiDog/dogtx.png",
-		Accuracy:   aiAccuracy,
-		Wins:       correctA,
-		Total:      totalA,
-		BestStreak: calcStreakAI(aiPreds),
-	})
 
 	// Current user.
 	user, err := s.repo.GetUserByID(userID)
@@ -129,21 +121,6 @@ func calcStreak(preds []repo.Prediction) int {
 	maxStreak, cur := 0, 0
 	for _, p := range preds {
 		if p.IsCorrect != nil && *p.IsCorrect {
-			cur++
-			if cur > maxStreak {
-				maxStreak = cur
-			}
-		} else {
-			cur = 0
-		}
-	}
-	return maxStreak
-}
-
-func calcStreakAI(preds []repo.Prediction) int {
-	maxStreak, cur := 0, 0
-	for _, p := range preds {
-		if p.Status == "won" {
 			cur++
 			if cur > maxStreak {
 				maxStreak = cur
