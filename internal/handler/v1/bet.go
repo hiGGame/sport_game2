@@ -81,13 +81,17 @@ func (h *BetHandler) ShareSuccess(c *gin.Context) {
 func (h *BetHandler) DailyPK(c *gin.Context) {
 	userID := c.GetInt64("userId")
 
-	resp, err := h.svc.GetDailyPK(userID)
+	resp, err := h.svc.GetPK(userID)
 	if err != nil {
 		middleware.AbortWithError(c, err)
 		return
 	}
 	if resp == nil {
-		c.JSON(200, gin.H{"message": "昨天没有竞猜记录,不参与PK"})
+		c.JSON(200, gin.H{"settled": false, "message": "该周期没有竞猜记录"})
+		return
+	}
+	if resp.Winner == "" {
+		c.JSON(200, gin.H{"settled": false, "message": "等待开奖结果"})
 		return
 	}
 

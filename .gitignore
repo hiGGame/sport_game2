@@ -1,6 +1,6 @@
 # Binaries
-spider
-server
+/spider
+/server
 *.exe
 
 # IDE

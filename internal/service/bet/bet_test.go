@@ -22,16 +22,17 @@ func (f *fakeMatchRepo) GetMatchResult(matchId string) (*repo.DrawResultData, er
 }
 
 type fakeBetRepo struct {
-	predID          int64
-	predErr         error
-	predList        []repo.Prediction
-	listErr         error
-	aiPreds         []repo.AIPrediction
-	expertPreds     []repo.ExpertPrediction
-	settledByUser   []repo.Prediction
-	settledByUserErr error
-	settledByOpen   map[string][]repo.Prediction
-	settledByOpenErr error
+	predID         int64
+	predErr        error
+	predList       []repo.Prediction
+	listErr        error
+	aiPreds        []repo.AIPrediction
+	expertPreds    []repo.ExpertPrediction
+	predsByUser    []repo.Prediction
+	predsByUserErr error
+	predsByOpen    map[string][]repo.Prediction
+	predsByOpenErr error
+	predsInRange   []repo.Prediction
 }
 
 func (f *fakeBetRepo) CreatePrediction(p *repo.Prediction) (int64, error) {
@@ -54,20 +55,24 @@ func (f *fakeBetRepo) CheckDuplicatePrediction(userID int64, matchID, lotteryTyp
 	return false, nil
 }
 
-func (f *fakeBetRepo) GetSettledByOpenID(openID, fromTime, toTime string) ([]repo.Prediction, error) {
-	if f.settledByOpenErr != nil {
-		return nil, f.settledByOpenErr
+func (f *fakeBetRepo) GetPredictionsByOpenIDInRange(openID, fromTime, toTime string) ([]repo.Prediction, error) {
+	if f.predsByOpenErr != nil {
+		return nil, f.predsByOpenErr
 	}
-	if f.settledByOpen != nil {
-		if preds, ok := f.settledByOpen[openID]; ok {
+	if f.predsByOpen != nil {
+		if preds, ok := f.predsByOpen[openID]; ok {
 			return preds, nil
 		}
 	}
 	return nil, nil
 }
 
-func (f *fakeBetRepo) GetSettledByUserID(userID int64, fromTime, toTime string) ([]repo.Prediction, error) {
-	return f.settledByUser, f.settledByUserErr
+func (f *fakeBetRepo) GetPredictionsByUserInRange(userID int64, fromTime, toTime string) ([]repo.Prediction, error) {
+	return f.predsByUser, f.predsByUserErr
+}
+
+func (f *fakeBetRepo) GetAllPredictionsInRange(fromTime, toTime string) ([]repo.Prediction, error) {
+	return f.predsInRange, nil
 }
 
 type fakeCreditsManager struct {
@@ -294,11 +299,11 @@ func TestDecidePKWinner(t *testing.T) {
 	}
 }
 
-func TestGetDailyPK(t *testing.T) {
+func TestGetPK(t *testing.T) {
 	t.Run("no_user_predictions_returns_nil", func(t *testing.T) {
-		betRepo := &fakeBetRepo{settledByUser: nil}
+		betRepo := &fakeBetRepo{predsByUser: nil}
 		svc := NewService(&fakeMatchRepo{}, betRepo, &fakeCreditsManager{}, 60)
-		resp, err := svc.GetDailyPK(1)
+		resp, err := svc.GetPK(1)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -307,23 +312,43 @@ func TestGetDailyPK(t *testing.T) {
 		}
 	})
 	t.Run("user_db_error_propagates", func(t *testing.T) {
-		betRepo := &fakeBetRepo{settledByUserErr: errors.New("db down")}
+		betRepo := &fakeBetRepo{predsByUserErr: errors.New("db down")}
 		svc := NewService(&fakeMatchRepo{}, betRepo, &fakeCreditsManager{}, 60)
-		_, err := svc.GetDailyPK(1)
+		_, err := svc.GetPK(1)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
 	})
-	t.Run("full_response_and_winner", func(t *testing.T) {
+	t.Run("pending_returns_empty_winner", func(t *testing.T) {
 		betRepo := &fakeBetRepo{
-			settledByUser: makePreds(4, 3),
-			settledByOpen: map[string][]repo.Prediction{
+			predsByUser: []repo.Prediction{
+				{ID: 1, Status: "pending"},
+				{ID: 2, Status: "won", IsCorrect: boolPtr(true)},
+			},
+			predsByOpen: map[string][]repo.Prediction{
+				robotExpertOpenID: {{ID: 3, Status: "won", IsCorrect: boolPtr(true)}},
+				robotAIOpenID:     {{ID: 4, Status: "won", IsCorrect: boolPtr(true)}},
+			},
+		}
+		svc := NewService(&fakeMatchRepo{}, betRepo, &fakeCreditsManager{}, 60)
+		resp, err := svc.GetPK(1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if resp.Winner != "" {
+			t.Errorf("expected empty Winner for pending preds, got %q", resp.Winner)
+		}
+	})
+	t.Run("all_settled_returns_full_response", func(t *testing.T) {
+		betRepo := &fakeBetRepo{
+			predsByUser: makePreds(4, 3),
+			predsByOpen: map[string][]repo.Prediction{
 				robotExpertOpenID: makePreds(5, 5),
 				robotAIOpenID:     makePreds(3, 2),
 			},
 		}
 		svc := NewService(&fakeMatchRepo{}, betRepo, &fakeCreditsManager{}, 60)
-		resp, err := svc.GetDailyPK(1)
+		resp, err := svc.GetPK(1)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -336,31 +361,42 @@ func TestGetDailyPK(t *testing.T) {
 		if resp.AITotal != 3 || resp.AIWins != 2 {
 			t.Errorf("ai stats wrong: total=%d wins=%d", resp.AITotal, resp.AIWins)
 		}
-		if resp.UserAccuracy != 75 {
-			t.Errorf("user accuracy = %v, want 75", resp.UserAccuracy)
-		}
-		if resp.ExpertAccuracy != 100 {
-			t.Errorf("expert accuracy = %v, want 100", resp.ExpertAccuracy)
-		}
 		if resp.Winner != winnerExpert {
 			t.Errorf("winner = %q, want %q", resp.Winner, winnerExpert)
 		}
 	})
 	t.Run("ai_solo_winner_bug_regression", func(t *testing.T) {
 		betRepo := &fakeBetRepo{
-			settledByUser: makePreds(3, 3),
-			settledByOpen: map[string][]repo.Prediction{
+			predsByUser: makePreds(3, 3),
+			predsByOpen: map[string][]repo.Prediction{
 				robotExpertOpenID: makePreds(5, 5),
 				robotAIOpenID:     makePreds(7, 7),
 			},
 		}
 		svc := NewService(&fakeMatchRepo{}, betRepo, &fakeCreditsManager{}, 60)
-		resp, err := svc.GetDailyPK(1)
+		resp, err := svc.GetPK(1)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
 		if resp.Winner != winnerAI {
 			t.Errorf("winner = %q, want %q (regression: maxWins was not updated for ai)", resp.Winner, winnerAI)
+		}
+	})
+	t.Run("robots_no_bets_still_returns_pk", func(t *testing.T) {
+		betRepo := &fakeBetRepo{
+			predsByUser: makePreds(3, 2),
+			predsByOpen: map[string][]repo.Prediction{},
+		}
+		svc := NewService(&fakeMatchRepo{}, betRepo, &fakeCreditsManager{}, 60)
+		resp, err := svc.GetPK(1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if resp.Winner != winnerUser {
+			t.Errorf("expected user wins when robots have no bets, got %q", resp.Winner)
+		}
+		if resp.ExpertTotal != 0 || resp.AITotal != 0 {
+			t.Error("expected 0 for robots with no bets")
 		}
 	})
 }

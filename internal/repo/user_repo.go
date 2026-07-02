@@ -505,48 +505,68 @@ func (db *DB) GetSettledAIPreds() ([]Prediction, error) {
 	return list, nil
 }
 
-func (db *DB) GetSettledByOpenID(openID, fromTime, toTime string) ([]Prediction, error) {
+func (db *DB) GetPredictionsByOpenIDInRange(openID, fromTime, toTime string) ([]Prediction, error) {
 	rows, err := db.Query(`SELECT p.id, p.user_id, p.match_id, p.lottery_type, p.match_code, p.sub_type, p.bet_code, p.handicap, p.points, p.status, p.is_correct
 		FROM predictions p
 		JOIN matches m ON p.match_id = m.match_id AND p.lottery_type = m.lottery_type
-		WHERE p.user_id = (SELECT id FROM users WHERE open_id = $1) AND m.match_time_str >= $2 AND m.match_time_str < $3 AND p.status IN ('won','lost') AND p.is_correct IS NOT NULL`, openID, fromTime, toTime)
+		WHERE p.user_id = (SELECT id FROM users WHERE open_id = $1) AND m.match_time_str >= $2 AND m.match_time_str < $3`, openID, fromTime, toTime)
 	if err != nil {
-		return nil, fmt.Errorf("get settled predictions by openID: %w", err)
+		return nil, fmt.Errorf("get predictions by openID: %w", err)
 	}
 	defer rows.Close()
 	var list []Prediction
 	for rows.Next() {
 		var p Prediction
 		if err := rows.Scan(&p.ID, &p.UserID, &p.MatchID, &p.LotteryType, &p.MatchCode, &p.SubType, &p.BetCode, &p.Handicap, &p.Points, &p.Status, &p.IsCorrect); err != nil {
-			return nil, fmt.Errorf("scan settled prediction by openID: %w", err)
+			return nil, fmt.Errorf("scan prediction by openID: %w", err)
 		}
 		list = append(list, p)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate settled predictions by openID: %w", err)
+		return nil, fmt.Errorf("iterate predictions by openID: %w", err)
 	}
 	return list, nil
 }
 
-func (db *DB) GetSettledByUserID(userID int64, fromTime, toTime string) ([]Prediction, error) {
+func (db *DB) GetPredictionsByUserInRange(userID int64, fromTime, toTime string) ([]Prediction, error) {
 	rows, err := db.Query(`SELECT p.id, p.user_id, p.match_id, p.lottery_type, p.match_code, p.sub_type, p.bet_code, p.handicap, p.points, p.status, p.is_correct
 		FROM predictions p
 		JOIN matches m ON p.match_id = m.match_id AND p.lottery_type = m.lottery_type
-		WHERE p.user_id = $1 AND m.match_time_str >= $2 AND m.match_time_str < $3 AND p.status IN ('won','lost') AND p.is_correct IS NOT NULL`, userID, fromTime, toTime)
+		WHERE p.user_id = $1 AND m.match_time_str >= $2 AND m.match_time_str < $3`, userID, fromTime, toTime)
 	if err != nil {
-		return nil, fmt.Errorf("get settled predictions by userID: %w", err)
+		return nil, fmt.Errorf("get predictions by userID: %w", err)
 	}
 	defer rows.Close()
 	var list []Prediction
 	for rows.Next() {
 		var p Prediction
 		if err := rows.Scan(&p.ID, &p.UserID, &p.MatchID, &p.LotteryType, &p.MatchCode, &p.SubType, &p.BetCode, &p.Handicap, &p.Points, &p.Status, &p.IsCorrect); err != nil {
-			return nil, fmt.Errorf("scan settled prediction by userID: %w", err)
+			return nil, fmt.Errorf("scan prediction by userID: %w", err)
 		}
 		list = append(list, p)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate settled predictions by userID: %w", err)
+		return nil, fmt.Errorf("iterate predictions by userID: %w", err)
+	}
+	return list, nil
+}
+
+func (db *DB) GetAllPredictionsInRange(fromTime, toTime string) ([]Prediction, error) {
+	rows, err := db.Query(`SELECT p.id, p.user_id, p.match_id, p.lottery_type, p.match_code, p.sub_type, p.bet_code, p.handicap, p.points, p.status, p.is_correct
+		FROM predictions p
+		JOIN matches m ON p.match_id = m.match_id AND p.lottery_type = m.lottery_type
+		WHERE m.match_time_str >= $1 AND m.match_time_str < $2`, fromTime, toTime)
+	if err != nil {
+		return nil, fmt.Errorf("get all predictions in range: %w", err)
+	}
+	defer rows.Close()
+	var list []Prediction
+	for rows.Next() {
+		var p Prediction
+		if err := rows.Scan(&p.ID, &p.UserID, &p.MatchID, &p.LotteryType, &p.MatchCode, &p.SubType, &p.BetCode, &p.Handicap, &p.Points, &p.Status, &p.IsCorrect); err != nil {
+			continue
+		}
+		list = append(list, p)
 	}
 	return list, nil
 }

@@ -32,8 +32,9 @@ type betStore interface {
 	GetAIPrediction(matchID string) ([]repo.AIPrediction, error)
 	GetExpertPredictions(matchID string) ([]repo.ExpertPrediction, error)
 	CheckDuplicatePrediction(userID int64, matchID, lotteryType, subType string) (bool, error)
-	GetSettledByOpenID(openID, fromTime, toTime string) ([]repo.Prediction, error)
-	GetSettledByUserID(userID int64, fromTime, toTime string) ([]repo.Prediction, error)
+	GetPredictionsByOpenIDInRange(openID, fromTime, toTime string) ([]repo.Prediction, error)
+	GetPredictionsByUserInRange(userID int64, fromTime, toTime string) ([]repo.Prediction, error)
+	GetAllPredictionsInRange(fromTime, toTime string) ([]repo.Prediction, error)
 }
 
 type creditsManager interface {
@@ -330,17 +331,18 @@ type DailyPKResponse struct {
 	Winner         string  `json:"winner,omitempty"`
 }
 
-func (s *Service) GetDailyPK(userID int64) (*DailyPKResponse, error) {
-	loc, err := time.LoadLocation(PKTimezone)
-	if err != nil {
-		return nil, fmt.Errorf("load pk timezone %s: %w", PKTimezone, err)
-	}
-
-	// 竞彩周期以每日 11:00 为分界线 (前日 11:00 ~ 当日 11:00)。
-	// PK "昨天"指: 用户调用时的上一个完整竞彩周期。
-	// 如果当前时间 >= 11:00: 昨天周期 = 昨天 11:00 ~ 今天 11:00
-	// 如果当前时间 <  11:00: 昨天周期 = 前天 11:00 ~ 昨天 11:00
-	now := time.Now().In(loc)
+// GetPK 返回上一个竞彩周期(11:00~11:00)的三方 PK 对比结果。
+//
+// 规则:
+//   - 用户在上一个竞彩周期无下注 → 返回 nil (handler 返回“该周期没有竞猜记录”)
+//   - 用户 + 大拿(老委鬼) + AI狗 任一方的预测未全部开奖 → Winner 为 "" (handler 返回“等待开奖”)
+//   - 全部已开奖 → 正常返回 PK 对比, Winner 不为空
+//
+// 竞彩周期: 每日 11:00 为分界线。
+//   - 当前 >= 11:00 → 周期 = 昨天 11:00 ~ 今天 11:00
+//   - 当前 <  11:00 → 周期 = 前天 11:00 ~ 昨天 11:00
+func (s *Service) GetPK(userID int64) (*DailyPKResponse, error) {
+	now := time.Now().In(s.pkLocation)
 	pkDate := now.AddDate(0, 0, -1)
 	if now.Hour() < 11 {
 		pkDate = now.AddDate(0, 0, -2)
@@ -348,22 +350,25 @@ func (s *Service) GetDailyPK(userID int64) (*DailyPKResponse, error) {
 	fromTime := pkDate.Format("2006-01-02") + " 11:00:00"
 	toTime := pkDate.AddDate(0, 0, 1).Format("2006-01-02") + " 11:00:00"
 
-	userPreds, err := s.betRepo.GetSettledByUserID(userID, fromTime, toTime)
+	userPreds, err := s.betRepo.GetPredictionsByUserInRange(userID, fromTime, toTime)
 	if err != nil {
-		return nil, fmt.Errorf("get user settled predictions: %w", err)
+		return nil, fmt.Errorf("get user predictions: %w", err)
 	}
 	if len(userPreds) == 0 {
-		// 昨天没有竞猜记录,不参与 PK,返回 nil 让 handler 给出提示。
 		return nil, nil
 	}
 
-	expertPreds, err := s.betRepo.GetSettledByOpenID(robotExpertOpenID, fromTime, toTime)
+	expertPreds, err := s.betRepo.GetPredictionsByOpenIDInRange(robotExpertOpenID, fromTime, toTime)
 	if err != nil {
-		return nil, fmt.Errorf("get expert settled predictions: %w", err)
+		return nil, fmt.Errorf("get expert predictions: %w", err)
 	}
-	aiPreds, err := s.betRepo.GetSettledByOpenID(robotAIOpenID, fromTime, toTime)
+	aiPreds, err := s.betRepo.GetPredictionsByOpenIDInRange(robotAIOpenID, fromTime, toTime)
 	if err != nil {
-		return nil, fmt.Errorf("get ai settled predictions: %w", err)
+		return nil, fmt.Errorf("get ai predictions: %w", err)
+	}
+
+	if hasPending(userPreds, expertPreds, aiPreds) {
+		return &DailyPKResponse{}, nil
 	}
 
 	userTotal, userWins := countWins(userPreds)
@@ -391,6 +396,18 @@ func (s *Service) GetDailyPK(userID int64) (*DailyPKResponse, error) {
 	resp.Winner = decidePKWinner(userWins, expertWins, aiWins)
 
 	return resp, nil
+}
+
+// hasPending returns true if any prediction across all groups is still pending.
+func hasPending(groups ...[]repo.Prediction) bool {
+	for _, group := range groups {
+		for _, p := range group {
+			if p.Status == "pending" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // decidePKWinner 根据三方胜场数返回 PK 胜者标识:
